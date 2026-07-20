@@ -10,12 +10,16 @@ export interface InputState {
 
 export class InputHandler {
   private keys: { [key: string]: boolean } = {};
-  public touchJoystick: { x: number; y: number } = { x: 0, y: 0 };
+  public joystickDir: { x: number; y: number } = { x: 0, y: 0 };
 
   constructor() {
     window.addEventListener('keydown', (e) => {
+      // Prevent browser scroll on arrows/space
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
       this.keys[e.key.toLowerCase()] = true;
-    });
+    }, { passive: false });
 
     window.addEventListener('keyup', (e) => {
       this.keys[e.key.toLowerCase()] = false;
@@ -31,13 +35,13 @@ export class InputHandler {
     if (this.keys['a'] || this.keys['arrowleft']) moveX -= 1;
     if (this.keys['d'] || this.keys['arrowright']) moveX += 1;
 
-    // Blend with touch joystick if active
-    if (this.touchJoystick.x !== 0 || this.touchJoystick.y !== 0) {
-      moveX = this.touchJoystick.x;
-      moveY = this.touchJoystick.y;
+    // Combine with Joystick
+    if (this.joystickDir.x !== 0 || this.joystickDir.y !== 0) {
+      moveX = this.joystickDir.x;
+      moveY = this.joystickDir.y;
     }
 
-    // Normalize diagonal movement speed
+    // Normalize diagonal vector
     const len = Math.sqrt(moveX * moveX + moveY * moveY);
     if (len > 1) {
       moveX /= len;

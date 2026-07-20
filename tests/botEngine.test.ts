@@ -20,6 +20,11 @@ describe('BotEngine AI Logic', () => {
     const bot = engine.players.get('bot1')!;
     
     expect(bot.isBot).toBe(true);
-    expect(bot.tasks.length).toBeGreaterThan(0);
+    if (bot.role === 'CREWMATE') {
+      expect(bot.tasks.length).toBeGreaterThan(0);
+    } else {
+      expect(bot.tasks.length).toBe(0);
+    }
   });
 });
+
