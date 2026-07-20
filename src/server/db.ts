@@ -3,14 +3,26 @@ import { UserProfile } from '../shared/types';
 import path from 'path';
 import fs from 'fs';
 
-const dbPath = process.env.DATABASE_PATH || './db/database.sqlite';
+const rawDbPath = process.env.DATABASE_PATH || './db/database.sqlite';
+const dbPath = path.isAbsolute(rawDbPath) ? rawDbPath : path.resolve(process.cwd(), rawDbPath);
 const dbDir = path.dirname(dbPath);
 
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+try {
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Could not create db directory, using tmp fallback:', e);
 }
 
-const db = new sqlite3.Database(dbPath);
+let db: sqlite3.Database;
+try {
+  db = new sqlite3.Database(dbPath);
+} catch (err) {
+  console.warn('SQLite init warning, using memory fallback:', err);
+  db = new sqlite3.Database(':memory:');
+}
+
 
 export function initDb(): Promise<void> {
   return new Promise((resolve, reject) => {

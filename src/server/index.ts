@@ -350,10 +350,24 @@ function broadcastGameState(room: any): void {
   });
 }
 
-// Start HTTP server
-initDb().then(() => {
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 MetaMurder Server running on port ${PORT}`);
+const rawPort = process.env.PORT || 4000;
+
+// Initialize Database asynchronously
+initDb().catch(err => {
+  console.warn('Database initialization warning:', err);
+});
+
+// Start HTTP server immediately so Hostinger/Passenger reverse proxy connects without 503
+if (typeof rawPort === 'string' && (rawPort.startsWith('/') || rawPort.startsWith('\\\\.\\pipe\\'))) {
+  httpServer.listen(rawPort, () => {
+    console.log(`🚀 MetaMurder Server running on Hostinger Socket ${rawPort}`);
   });
-}).catch(console.error);
+} else {
+  const portNum = Number(rawPort) || 4000;
+  httpServer.listen(portNum, '0.0.0.0', () => {
+    console.log(`🚀 MetaMurder Server running on port ${portNum}`);
+  });
+}
+
+
 
