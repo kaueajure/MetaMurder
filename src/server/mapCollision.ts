@@ -1,34 +1,34 @@
 import { Vector2D } from '../shared/types';
-import { MAP_WALLS, WallSegment } from '../shared/mapData';
+import { MAP_WALLS, MAP_BOUNDS, WallSegment } from '../shared/mapData';
 
-const PLAYER_RADIUS = 18;
+const PLAYER_RADIUS = 16;
 
 export function clampPosition(current: Vector2D, next: Vector2D): Vector2D {
-  // Global Map Boundaries
-  const minX = 60;
-  const maxX = 1940;
-  const minY = 60;
-  const maxY = 1140;
+  const margin = PLAYER_RADIUS + 10;
+  const minX = margin;
+  const maxX = MAP_BOUNDS.width - margin;
+  const minY = margin;
+  const maxY = MAP_BOUNDS.height - margin;
 
   let targetX = Math.max(minX, Math.min(maxX, next.x));
   let targetY = Math.max(minY, Math.min(maxY, next.y));
 
-  // Try full step (x + vx, y + vy)
+  // Try full move
   if (!checkWallCollision({ x: targetX, y: targetY }, PLAYER_RADIUS)) {
     return { x: targetX, y: targetY };
   }
 
-  // Wall Sliding: Try X movement alone
+  // Wall Sliding: try X only
   if (!checkWallCollision({ x: targetX, y: current.y }, PLAYER_RADIUS)) {
     return { x: targetX, y: current.y };
   }
 
-  // Wall Sliding: Try Y movement alone
+  // Wall Sliding: try Y only
   if (!checkWallCollision({ x: current.x, y: targetY }, PLAYER_RADIUS)) {
     return { x: current.x, y: targetY };
   }
 
-  // Otherwise stay at current position
+  // Stuck - stay in place
   return { x: current.x, y: current.y };
 }
 
@@ -43,7 +43,7 @@ export function checkWallCollision(center: Vector2D, radius: number): boolean {
 
 export function hasLineOfSight(p1: Vector2D, p2: Vector2D): boolean {
   for (const wall of MAP_WALLS) {
-    if (lineLineIntersection(p1, p2, { x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 })) {
+    if (lineSegmentIntersect(p1, p2, { x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 })) {
       return false;
     }
   }
@@ -70,12 +70,17 @@ function circleSegmentCollision(center: Vector2D, radius: number, wall: WallSegm
   return (distX * distX + distY * distY) < (radius * radius);
 }
 
-function lineLineIntersection(p1: Vector2D, p2: Vector2D, p3: Vector2D, p4: Vector2D): boolean {
-  const det = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
-  if (det === 0) return false;
+function lineSegmentIntersect(a1: Vector2D, a2: Vector2D, b1: Vector2D, b2: Vector2D): boolean {
+  const d1x = a2.x - a1.x;
+  const d1y = a2.y - a1.y;
+  const d2x = b2.x - b1.x;
+  const d2y = b2.y - b1.y;
 
-  const lambda = ((p4.y - p3.y) * (p4.x - p1.x) + (p3.x - p4.x) * (p4.y - p1.y)) / det;
-  const gamma = ((p1.y - p2.y) * (p4.x - p1.x) + (p2.x - p1.x) * (p4.y - p1.y)) / det;
+  const det = d1x * d2y - d1y * d2x;
+  if (Math.abs(det) < 0.0001) return false;
 
-  return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+  const t = ((b1.x - a1.x) * d2y - (b1.y - a1.y) * d2x) / det;
+  const u = ((b1.x - a1.x) * d1y - (b1.y - a1.y) * d1x) / det;
+
+  return t > 0 && t < 1 && u > 0 && u < 1;
 }

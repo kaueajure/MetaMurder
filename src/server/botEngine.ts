@@ -1,5 +1,5 @@
 import { Vector2D, PlayerRole, PlayerState, TaskDefinition } from '../shared/types';
-import { TASK_DEFINITIONS, ROOMS, VENTS, EMERGENCY_BUTTON_POS, SABOTAGE_NODES } from '../shared/mapData';
+import { TASK_DEFINITIONS, ROOMS, VENTS, EMERGENCY_BUTTON_POS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
 import { GameEngine, GamePlayer } from './gameEngine';
 import { sanitizeChatMessage } from './chatFilter';
 
@@ -7,15 +7,97 @@ type BotPersonality = 'DETETIVE' | 'DEFENSIVO' | 'ACUSADOR' | 'CAUTELOSO' | 'OBS
 
 const PERSONALITIES: BotPersonality[] = ['DETETIVE', 'DEFENSIVO', 'ACUSADOR', 'CAUTELOSO', 'OBSERVADOR'];
 
+// Diverse fallback chat pools per personality (no API dependency)
+const CREWMATE_CHAT_BODY: Record<BotPersonality, string[]> = {
+  DETETIVE: [
+    'Onde exatamente acharam o corpo? Eu estava fazendo tarefas.',
+    'Quem foi o último a ser visto perto do corpo?',
+    'Alguém notou alguma coisa estranha antes da denúncia?',
+    'Precisamos analisar quem estava sozinho naquele momento.',
+  ],
+  DEFENSIVO: [
+    'Eu estava fazendo tarefas, pode me limpar!',
+    'Tenho certeza que não fui eu, estava longe do corpo.',
+    'Eu vi gente fazendo tarefa comigo, sou inocente.',
+    'Não me votem, eu posso provar minha inocência depois.',
+  ],
+  ACUSADOR: [
+    'Achei muito suspeito quem denunciou, pode ser auto-report.',
+    'Alguém aqui estava se movendo estranho antes da reunião.',
+    'Eu acho que devemos votar em quem estava mais perto do corpo.',
+    'Confiem em mim, eu sei quem é o impostor!',
+  ],
+  CAUTELOSO: [
+    'Calma pessoal, vamos pensar antes de votar errado.',
+    'Se não temos certeza, melhor pular o voto.',
+    'Votar errado pode custar a partida, cuidado.',
+    'Vamos esperar mais provas antes de acusar alguém.',
+  ],
+  OBSERVADOR: [
+    'Eu não vi nada demais por enquanto.',
+    'Fiquem atentos na próxima rodada.',
+    'Vou observar melhor quem está se movimentando estranho.',
+    'Não vi ninguém suspeito, mas estou de olho.',
+  ]
+};
+
+const CREWMATE_CHAT_EMERGENCY: Record<BotPersonality, string[]> = {
+  DETETIVE: [
+    'Por que a emergência? Alguém viu algo?',
+    'Emergência pra quê? Precisamos de informação.',
+    'Quem apertou o botão? O que aconteceu?',
+  ],
+  DEFENSIVO: [
+    'Eu estava fazendo minhas tarefas normalmente...',
+    'Nem sabia que iam chamar reunião, estava no meu canto.',
+    'Eu sou inocente, prometo.',
+  ],
+  ACUSADOR: [
+    'Quem foi que chamou? Isso é muito suspeito.',
+    'Aposto que quem chamou tá tentando desviar atenção!',
+    'Emergência sem motivo? Vou ficar de olho.',
+  ],
+  CAUTELOSO: [
+    'Tá, mas tem motivo pra emergência?',
+    'Vamos ouvir todo mundo antes de decidir.',
+    'Sem provas, melhor pular.',
+  ],
+  OBSERVADOR: [
+    'Estou ouvindo todo mundo, continuem falando.',
+    'Alguém tem informação útil?',
+    'Vamos ver quem tem mais informação.',
+  ]
+};
+
+const IMPOSTOR_CHAT_BODY: string[] = [
+  'Onde acharam o corpo? Eu estava longe de lá.',
+  'Não vi nada, estava fazendo tarefas.',
+  'Quem denunciou? Pode ser auto-report, cuidado.',
+  'Eu estava no outro lado do mapa quando aconteceu.',
+  'Gente, eu acho que o assassino fugiu pela direita.',
+  'Não sei quem foi, mas eu sou inocente.',
+  'Vamos ter calma e pensar antes de votar.',
+  'Eu vi alguém se movimentando estranho perto de lá...',
+];
+
+const IMPOSTOR_CHAT_EMERGENCY: string[] = [
+  'Por que a emergência? Eu estava no meio de uma tarefa.',
+  'Alguém viu algo? Eu não vi nada de suspeito.',
+  'Tá, mas quem chamou precisa explicar.',
+  'Eu estava fazendo tarefas normalmente, emergência pra quê?',
+  'Acho que devíamos pular se ninguém tem prova.',
+];
+
 interface BotMemory {
   personality: BotPersonality;
   currentRoomName: string;
-  seenPlayers: Map<string, { x: number; y: number; room: string; time: number }>;
+  seenPlayers: Map<string, { name: string; room: string; time: number }>;
   seenBodies: string[];
-  suspicionScores: Map<string, number>; // playerId -> 0..100
+  suspicionScores: Map<string, number>;
   myCurrentTaskIndex: number;
   taskTimer: number;
   moveTarget: Vector2D | null;
+  hasChatted: boolean; // prevent duplicate chat in same meeting
 }
 
 async function generateGeminiBotChat(
@@ -32,25 +114,26 @@ async function generateGeminiBotChat(
   if (!apiKey) return null;
 
   try {
-    const prompt = `Você é o jogador virtual '${botName}' em um jogo de dedução social tipo Among Us/MetaMurder.
-Sua personalidade: ${personality}.
-Seu papel secreto: ${botRole === 'IMPOSTOR' ? 'ASSASSINO (Impostor - simule inocência ou culpe discretamente outros)' : 'TRIPULANTE (Inocente - encontre o assassino)'}.
-Sua localização atual na nave: ${currentRoom}.
-Evento: ${reason === 'BODY' ? `Corpo denunciado por ${reporterName}` : 'Reunião de Emergência'}.
-Jogadores vivos: ${livingPlayers.join(', ')}.
-O que você observou: ${observedContext}.
+    const roleText = botRole === 'IMPOSTOR'
+      ? 'ASSASSINO (finja inocência, acuse discretamente outros)'
+      : 'TRIPULANTE (ajude a encontrar o assassino)';
 
-Escreva UMA mensagem curta em Português (máximo 12 palavras) para o chat da reunião, agindo de acordo com sua personalidade. Não use aspas nem prefixos.`;
+    const prompt = `Você é '${botName}', personalidade: ${personality}, papel: ${roleText}. Local: ${currentRoom}. Evento: ${reason === 'BODY' ? `Corpo denunciado por ${reporterName}` : 'Reunião de Emergência'}. Jogadores: ${livingPlayers.join(', ')}. ${observedContext}. Escreva UMA frase curta (max 12 palavras) de chat em Português brasileiro. Sem aspas.`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000); // 4s timeout
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 50, temperature: 0.85 }
-      })
+        generationConfig: { maxOutputTokens: 40, temperature: 0.9 }
+      }),
+      signal: controller.signal
     });
 
+    clearTimeout(timeout);
     if (!response.ok) return null;
     const data = await response.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
@@ -78,7 +161,8 @@ export class BotEngine {
       suspicionScores: new Map(),
       myCurrentTaskIndex: 0,
       taskTimer: 0,
-      moveTarget: null
+      moveTarget: null,
+      hasChatted: false
     });
   }
 
@@ -94,8 +178,11 @@ export class BotEngine {
     if (this.gameEngine.phase === 'MEETING') return;
     if (this.gameEngine.phase !== 'PLAYING') return;
 
-    // Track room location
-    const currentRoom = ROOMS.find(r => 
+    // Reset meeting chat flag when playing resumes
+    memory.hasChatted = false;
+
+    // Track current room
+    const currentRoom = ROOMS.find(r =>
       bot.x >= r.x && bot.x <= r.x + r.width &&
       bot.y >= r.y && bot.y <= r.y + r.height
     );
@@ -103,7 +190,7 @@ export class BotEngine {
       memory.currentRoomName = currentRoom.name;
     }
 
-    // Scan nearby players & update memory
+    // Scan nearby players
     this.updateVisionMemory(bot, memory);
 
     // Check for bodies nearby to report
@@ -139,7 +226,6 @@ export class BotEngine {
       }
     }
 
-    // Role actions
     if (bot.role === 'CREWMATE') {
       this.tickCrewmateBot(bot, memory, deltaTime);
     } else {
@@ -169,7 +255,6 @@ export class BotEngine {
       bot.vx = 0;
       bot.vy = 0;
       memory.taskTimer += deltaTime;
-
       if (memory.taskTimer >= 3.5) {
         this.gameEngine.completeTask(bot.id, currentTask.id);
         memory.taskTimer = 0;
@@ -182,7 +267,7 @@ export class BotEngine {
     const killCooldown = bot.killCooldownRemaining;
 
     if (killCooldown <= 0) {
-      const candidates = Array.from(this.gameEngine.players.values()).filter(p => 
+      const candidates = Array.from(this.gameEngine.players.values()).filter(p =>
         p.id !== bot.id && p.state === 'ALIVE' && p.role === 'CREWMATE' && !p.inVent
       );
 
@@ -201,7 +286,7 @@ export class BotEngine {
       }
     }
 
-    if (bot.sabotageCooldownRemaining <= 0 && Math.random() < 0.05) {
+    if (bot.sabotageCooldownRemaining <= 0 && Math.random() < 0.03) {
       const sabTypes: ('LIGHTS' | 'REACTOR' | 'O2')[] = ['LIGHTS', 'REACTOR', 'O2'];
       this.gameEngine.triggerSabotage(bot.id, sabTypes[Math.floor(Math.random() * sabTypes.length)]);
     }
@@ -209,8 +294,8 @@ export class BotEngine {
     if (!memory.moveTarget || this.dist(bot, memory.moveTarget) < 40) {
       const randomRoom = ROOMS[Math.floor(Math.random() * ROOMS.length)];
       memory.moveTarget = {
-        x: randomRoom.x + randomRoom.width / 2 + (Math.random() * 100 - 50),
-        y: randomRoom.y + randomRoom.height / 2 + (Math.random() * 100 - 50)
+        x: randomRoom.x + randomRoom.width / 2 + (Math.random() * 60 - 30),
+        y: randomRoom.y + randomRoom.height / 2 + (Math.random() * 60 - 30)
       };
     }
 
@@ -223,23 +308,29 @@ export class BotEngine {
     const memory = this.memories.get(bot.id);
     const meeting = this.gameEngine.meetingState;
     if (!meeting || !memory) return;
+    if (memory.hasChatted) return; // Already chatted this meeting
+    memory.hasChatted = true;
 
-    // Staggered chat timing per bot (2s to 9s into discussion)
-    const delay = Math.floor(Math.random() * 7000) + 2000;
+    // Each bot gets a unique staggered delay (1s to 6s)
+    const delay = 1000 + Math.floor(Math.random() * 5000);
 
     setTimeout(async () => {
+      // Safety: still in meeting?
       if (this.gameEngine.phase !== 'MEETING') return;
 
       const livingPlayers = Array.from(this.gameEngine.players.values())
         .filter(p => p.state === 'ALIVE')
         .map(p => p.name);
 
-      const seenNames = Array.from(memory.seenPlayers.keys())
-        .map(id => this.gameEngine.players.get(id)?.name)
-        .filter(Boolean) as string[];
+      const seenNames = Array.from(memory.seenPlayers.values())
+        .map(v => v.name)
+        .filter(Boolean);
 
-      const observedText = seenNames.length > 0 ? `Viu ${seenNames.slice(0, 2).join(' e ')} na ${memory.currentRoomName}` : `Estava sozinho na ${memory.currentRoomName}`;
+      const observedText = seenNames.length > 0
+        ? `Viu ${seenNames.slice(0, 2).join(' e ')} na ${memory.currentRoomName}.`
+        : `Estava sozinho na ${memory.currentRoomName}.`;
 
+      // Try Gemini AI first (with 4s timeout)
       let msg = await generateGeminiBotChat(
         bot.name,
         bot.role,
@@ -251,59 +342,38 @@ export class BotEngine {
         observedText
       );
 
-      // Unique procedural fallbacks tailored to each bot's personality & real location
+      // Fallback to procedural unique chat
       if (!msg) {
-        msg = this.generateFallbackChat(bot, memory, meeting, livingPlayers, seenNames);
+        msg = this.generateFallbackChat(bot, memory, meeting, livingPlayers);
       }
 
-      this.gameEngine.sendChatMessage(bot.id, msg);
+      // Double-check still in meeting before sending
+      if (this.gameEngine.phase === 'MEETING' || this.gameEngine.meetingState) {
+        this.gameEngine.sendChatMessage(bot.id, msg);
+      }
     }, delay);
   }
 
   private generateFallbackChat(
-    bot: GamePlayer, 
-    memory: BotMemory, 
-    meeting: any, 
-    livingPlayers: string[], 
-    seenNames: string[]
+    bot: GamePlayer,
+    memory: BotMemory,
+    meeting: any,
+    livingPlayers: string[]
   ): string {
-    const room = memory.currentRoomName;
     const isImp = bot.role === 'IMPOSTOR';
+    const isBody = meeting.reason === 'BODY';
 
     if (isImp) {
-      const scapegoats = livingPlayers.filter(n => n !== bot.name);
-      const target = scapegoats[Math.floor(Math.random() * scapegoats.length)] || 'alguém';
-      const impLines = [
-        `Eu estava na ${room} fazendo tarefas, não vi nada.`,
-        `Achei a movimentação do ${target} meio suspeita...`,
-        `Quem estava perto da ${room}? Eu acabei de passar por lá.`,
-        `Eu confio no ${target}, mas não sei quem foi.`,
-        `Alguém viu quem estava perto do corpo?`
-      ];
-      return impLines[Math.floor(Math.random() * impLines.length)];
+      const pool = isBody ? IMPOSTOR_CHAT_BODY : IMPOSTOR_CHAT_EMERGENCY;
+      return pool[Math.floor(Math.random() * pool.length)];
     }
 
-    // Crewmate fallback by personality
-    switch (memory.personality) {
-      case 'DETETIVE':
-        return meeting.reason === 'BODY' 
-          ? `Onde exatamente foi encontrado? Eu estava na ${room}.`
-          : `Alguém viu alguém saindo da ${room}?`;
-      case 'DEFENSIVO':
-        return seenNames.length > 0
-          ? `Eu estava na ${room} com ${seenNames[0]}, sou 100% inocente!`
-          : `Eu estava na ${room} fazendo minhas tarefas.`;
-      case 'ACUSADOR':
-        const accuseTarget = livingPlayers.find(n => n !== bot.name) || 'alguém';
-        return `O ${accuseTarget} estava se movendo de forma muito estranha!`;
-      case 'CAUTELOSO':
-        return `Vamos ter cuidado pra não expulsar inocente. Alguma prova clara?`;
-      case 'OBSERVADOR':
-      default:
-        return seenNames.length > 0 
-          ? `Cruzei com ${seenNames.join(' e ')} há pouco tempo.`
-          : `Não vi ninguém suspeito enquanto estava na ${room}.`;
-    }
+    // Crewmate - personality-based
+    const pool = isBody
+      ? CREWMATE_CHAT_BODY[memory.personality]
+      : CREWMATE_CHAT_EMERGENCY[memory.personality];
+
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   public handleMeetingVoting(bot: GamePlayer): void {
@@ -317,17 +387,19 @@ export class BotEngine {
 
       if (bot.role === 'IMPOSTOR') {
         const crewCandidates = livingPlayers.filter(p => p.role === 'CREWMATE');
-        const target = crewCandidates.length > 0 ? crewCandidates[Math.floor(Math.random() * crewCandidates.length)] : livingPlayers[0];
+        const target = crewCandidates.length > 0
+          ? crewCandidates[Math.floor(Math.random() * crewCandidates.length)]
+          : livingPlayers[0];
         this.gameEngine.castVote(bot.id, target.id);
       } else {
-        if (Math.random() < 0.65) {
+        if (Math.random() < 0.6) {
           const target = livingPlayers[Math.floor(Math.random() * livingPlayers.length)];
           this.gameEngine.castVote(bot.id, target.id);
         } else {
           this.gameEngine.castVote(bot.id, 'SKIP');
         }
       }
-    }, Math.floor(Math.random() * 5000) + 3000);
+    }, Math.floor(Math.random() * 4000) + 3000);
   }
 
   private moveTowards(bot: GamePlayer, target: Vector2D, deltaTime: number): void {
@@ -341,13 +413,16 @@ export class BotEngine {
       return;
     }
 
-    const speed = 180 * this.gameEngine.settings.playerSpeed;
+    const speed = 160 * this.gameEngine.settings.playerSpeed;
     bot.vx = (dx / dist) * speed;
     bot.vy = (dy / dist) * speed;
     bot.facing = dx < 0 ? 'LEFT' : 'RIGHT';
 
-    bot.x += bot.vx * deltaTime;
-    bot.y += bot.vy * deltaTime;
+    // Move and clamp to map bounds
+    const newX = Math.max(30, Math.min(MAP_BOUNDS.width - 30, bot.x + bot.vx * deltaTime));
+    const newY = Math.max(30, Math.min(MAP_BOUNDS.height - 30, bot.y + bot.vy * deltaTime));
+    bot.x = newX;
+    bot.y = newY;
   }
 
   private updateVisionMemory(bot: GamePlayer, memory: BotMemory): void {
@@ -355,8 +430,7 @@ export class BotEngine {
       if (p.id !== bot.id && p.state === 'ALIVE' && !p.inVent) {
         if (this.dist(bot, p) < 250) {
           memory.seenPlayers.set(p.id, {
-            x: p.x,
-            y: p.y,
+            name: p.name,
             room: memory.currentRoomName,
             time: Date.now()
           });

@@ -13,7 +13,7 @@ import {
   TaskType,
   SabotageType
 } from '../shared/types';
-import { TASK_DEFINITIONS, SPAWN_POINTS, EMERGENCY_BUTTON_POS, SABOTAGE_NODES } from '../shared/mapData';
+import { TASK_DEFINITIONS, SPAWN_POINTS, EMERGENCY_BUTTON_POS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
 import { TICK_RATE, KILL_DISTANCES } from '../shared/constants';
 import { clampPosition, hasLineOfSight } from './mapCollision';
 import { BotEngine } from './botEngine';
@@ -189,31 +189,24 @@ export class GameEngine {
     if (!player || player.state === 'DEAD' || this.phase !== 'PLAYING') return;
 
     // Validate speed to prevent speed hacks
-    const maxSpeed = 220 * this.settings.playerSpeed;
+    const maxSpeed = 260 * this.settings.playerSpeed;
     const speed = Math.sqrt(vx * vx + vy * vy);
 
-    let validVx = vx;
-    let validVy = vy;
-    if (speed > maxSpeed) {
-      validVx = (vx / speed) * maxSpeed;
-      validVy = (vy / speed) * maxSpeed;
-    }
+    if (speed > maxSpeed * 1.5) return; // Reject clearly hacked speeds
 
-    // Apply position clamp / wall collisions for ALIVE players
-    if (player.state === 'ALIVE') {
-      const targetPos = { x: player.x + validVx * 0.05, y: player.y + validVy * 0.05 };
-      const clamped = clampPosition({ x: player.x, y: player.y }, targetPos);
-      player.x = clamped.x;
-      player.y = clamped.y;
-    } else { // Ghosts can walk through walls
-      player.x += validVx * 0.05;
-      player.y += validVy * 0.05;
-    }
+    // Validate position: client sends predicted position, server validates with wall collision
+    const clampedX = Math.max(50, Math.min(MAP_BOUNDS.width - 50, x));
+    const clampedY = Math.max(50, Math.min(MAP_BOUNDS.height - 50, y));
+    const targetPos = { x: clampedX, y: clampedY };
+    const clamped = clampPosition({ x: player.x, y: player.y }, targetPos);
 
-    player.vx = validVx;
-    player.vy = validVy;
+    player.x = clamped.x;
+    player.y = clamped.y;
+    player.vx = vx;
+    player.vy = vy;
     player.facing = facing;
   }
+
 
   public killPlayer(killerId: string, targetId: string): boolean {
     const killer = this.players.get(killerId);

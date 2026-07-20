@@ -7,7 +7,7 @@ import { Minimap } from './Minimap';
 import { MeetingOverlay } from './MeetingOverlay';
 import { TaskOverlay } from './TaskOverlay';
 import { SabotageOverlay } from './SabotageOverlay';
-import { EMERGENCY_BUTTON_POS, SABOTAGE_NODES, TASK_DEFINITIONS } from '../../shared/mapData';
+import { EMERGENCY_BUTTON_POS, SABOTAGE_NODES, TASK_DEFINITIONS, MAP_BOUNDS } from '../../shared/mapData';
 import { socket } from '../socket';
 import { SOCKET_EVENTS } from '../../shared/protocol';
 
@@ -96,9 +96,9 @@ export const GameView: React.FC<Props> = ({
           localPosRef.current.x += vx * dt;
           localPosRef.current.y += vy * dt;
 
-          // Clamp within map bounds (60 to 1940)
-          localPosRef.current.x = Math.max(60, Math.min(1940, localPosRef.current.x));
-          localPosRef.current.y = Math.max(60, Math.min(1140, localPosRef.current.y));
+          // Clamp within map bounds
+          localPosRef.current.x = Math.max(30, Math.min(MAP_BOUNDS.width - 30, localPosRef.current.x));
+          localPosRef.current.y = Math.max(30, Math.min(MAP_BOUNDS.height - 30, localPosRef.current.y));
 
           // Throttle socket C2S_MOVE updates to 30Hz
           if (moveThrottleTimer >= 0.033) {
