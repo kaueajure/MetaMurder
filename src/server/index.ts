@@ -12,6 +12,12 @@ import { SOCKET_EVENTS, C2SMovePayload } from '../shared/protocol';
 import { GameSettings, PlayerCustomization, PlayerPublicData } from '../shared/types';
 
 
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config();
 
 const app = express();
@@ -23,19 +29,24 @@ const io = new Server(httpServer, {
   }
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = Number(process.env.PORT) || 4000;
 
 app.use(cors());
 app.use(express.json());
 app.use('/api', apiRouter);
 
-// Serve static frontend in production mode
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../client')));
+// Serve static frontend files (checking dist/client or relative path)
+const clientBuildPath = path.resolve(process.cwd(), 'dist/client');
+const altBuildPath = path.resolve(__dirname, '../client');
+const staticPath = fs.existsSync(clientBuildPath) ? clientBuildPath : altBuildPath;
+
+if (fs.existsSync(staticPath)) {
+  app.use(express.static(staticPath));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../client/index.html'));
+    res.sendFile(path.join(staticPath, 'index.html'));
   });
 }
+
 
 // Socket.IO real-time multiplayer connections
 io.on('connection', (socket: Socket) => {
@@ -341,7 +352,8 @@ function broadcastGameState(room: any): void {
 
 // Start HTTP server
 initDb().then(() => {
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 MetaMurder Server running on port ${PORT}`);
   });
 }).catch(console.error);
+
