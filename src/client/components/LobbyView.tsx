@@ -35,6 +35,16 @@ export const LobbyView: React.FC<Props> = ({
             <span className="bg-slate-950 border border-cyan-500/40 text-cyan-400 font-mono font-bold px-3 py-1 rounded-lg text-sm tracking-widest select-all">
               {summary.code}
             </span>
+            <button
+              onClick={() => {
+                soundEngine.playButtonClick();
+                navigator.clipboard.writeText(summary.code);
+                alert('Código da sala copiado para a área de transferência!');
+              }}
+              className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-700/50 text-cyan-300 font-bold text-[10px] rounded-md transition-colors"
+            >
+              📋 COPIAR
+            </button>
           </div>
         </div>
 

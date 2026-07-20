@@ -43,19 +43,19 @@ export const ChatBox: React.FC<Props> = ({ messages, self, onSendMessage }) => {
       </div>
 
       {/* Message List */}
-      <div className="flex-1 p-3 overflow-y-auto space-y-2 text-sm font-sans">
+      <div className="flex-1 p-3 overflow-y-auto space-y-1 text-sm font-sans">
         {visibleMessages.map(msg => {
           const colorObj = PLAYER_COLORS.find(c => c.id === msg.senderColor) || PLAYER_COLORS[0];
           return (
-            <div key={msg.id} className={`p-2 rounded-lg ${msg.isSystem ? 'bg-amber-950/40 border border-amber-800/40 text-amber-300 text-xs' : 'bg-slate-900/60'}`}>
+            <div key={msg.id} className={`p-1.5 rounded-lg ${msg.isSystem ? 'bg-amber-950/40 border border-amber-800/40 text-amber-300 text-xs text-center' : 'bg-slate-900/60'}`}>
               {!msg.isSystem && (
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorObj.hex }} />
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: colorObj.hex }} />
                   <span className="font-bold text-xs" style={{ color: colorObj.hex }}>{msg.senderName}</span>
                   {msg.isGhostOnly && <span className="text-[9px] text-purple-400 font-mono">(FANTASMA)</span>}
                 </div>
               )}
-              <div className="text-slate-200 text-xs break-words pl-4">{msg.text}</div>
+              <div className={`text-slate-200 text-xs break-words whitespace-pre-wrap ${msg.isSystem ? '' : 'pl-4'}`}>{msg.text}</div>
             </div>
           );
         })}

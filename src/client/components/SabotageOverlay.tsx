@@ -36,7 +36,28 @@ export const SabotageOverlay: React.FC<Props> = ({ sabotage, onResolveNode, onCl
         {sabotage.activeType === 'O2' && (
           <O2Fix onResolve={() => { onResolveNode('O2_KEYPAD_1'); onClose(); }} />
         )}
+
+        {sabotage.activeType === 'COMMS' && (
+          <CommsFix onResolve={() => { onResolveNode('COMMS_CONSOLE'); onClose(); }} />
+        )}
       </div>
+    </div>
+  );
+};
+
+const CommsFix: React.FC<{ onResolve: () => void }> = ({ onResolve }) => {
+  return (
+    <div className="py-6 text-center">
+      <p className="text-sm text-slate-300 mb-6">Calibre o sinal do console de comunicações:</p>
+      <button
+        onClick={() => {
+          soundEngine.playTaskComplete();
+          onResolve();
+        }}
+        className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 font-bold rounded-xl text-white shadow-lg active:scale-95 border border-cyan-400/40"
+      >
+        📻 RECALIBRAR FREQUÊNCIA DE COMUNICAÇÃO
+      </button>
     </div>
   );
 };

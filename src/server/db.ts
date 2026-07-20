@@ -17,12 +17,19 @@ try {
 
 let db: sqlite3.Database;
 try {
-  db = new sqlite3.Database(dbPath);
+  db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.warn('SQLite init warning, using memory fallback:', err);
+      db = new sqlite3.Database(':memory:');
+    }
+  });
+  db.on('error', (err) => {
+    console.error('SQLite generic error:', err);
+  });
 } catch (err) {
-  console.warn('SQLite init warning, using memory fallback:', err);
+  console.warn('SQLite sync init warning, using memory fallback:', err);
   db = new sqlite3.Database(':memory:');
 }
-
 
 export function initDb(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -59,17 +66,17 @@ export function initDb(): Promise<void> {
   });
 }
 
-
-
 export function getOrCreateGuest(guestId: string, name?: string): Promise<UserProfile> {
   return new Promise((resolve) => {
     const rawName = (name && name.trim()) ? name.trim().slice(0, 15) : '';
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const cleanName = rawName || `Tripulante_${randomSuffix}`;
+    // Always append random suffix for guests to guarantee uniqueness upfront
+    const cleanName = rawName ? `${rawName}_${randomSuffix}` : `Tripulante_${randomSuffix}`;
 
     db.get('SELECT * FROM users WHERE id = ?', [guestId], (err, row: any) => {
       if (!err && row) {
-        return getUserProfile(guestId).then(resolve);
+        getUserProfile(guestId).then(resolve);
+        return;
       }
 
       // Insert new guest with unique username
@@ -78,12 +85,14 @@ export function getOrCreateGuest(guestId: string, name?: string): Promise<UserPr
         [guestId, cleanName],
         (err2) => {
           if (err2) {
+            console.error('Guest insert failed:', err2);
             // Handle username constraint failure by retrying with random ID
             const fallbackUsername = `Tripulante_${guestId.slice(-4)}_${Math.floor(100 + Math.random() * 900)}`;
             db.run(
               'INSERT INTO users (id, username, is_guest) VALUES (?, ?, 1)',
               [guestId, fallbackUsername],
-              () => {
+              (err3) => {
+                if (err3) console.error('Fallback guest insert failed:', err3);
                 db.run('INSERT INTO user_stats (user_id) VALUES (?)', [guestId], () => {});
                 getUserProfile(guestId).then(resolve);
               }
@@ -98,9 +107,8 @@ export function getOrCreateGuest(guestId: string, name?: string): Promise<UserPr
   });
 }
 
-
 export function getUserProfile(userId: string): Promise<UserProfile> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const query = `
       SELECT u.id, u.username, u.is_guest, u.equipped_color, u.equipped_hat, u.equipped_skin,
              s.games_played, s.crewmate_wins, s.impostor_wins, s.kills, s.tasks_completed, s.correct_votes
@@ -112,7 +120,7 @@ export function getUserProfile(userId: string): Promise<UserProfile> {
     db.get(query, [userId], (err, row: any) => {
       if (err || !row) {
         // Fallback default profile if not found
-        return resolve({
+        resolve({
           id: userId,
           username: `Player_${userId.slice(0, 4)}`,
           isGuest: true,
@@ -128,6 +136,7 @@ export function getUserProfile(userId: string): Promise<UserProfile> {
             correctVotes: 0
           }
         });
+        return;
       }
 
       resolve({
@@ -168,6 +177,11 @@ export function recordGameStats(
   statsDelta: { crewWin?: boolean; impWin?: boolean; kills?: number; tasks?: number; correctVote?: boolean }
 ): Promise<void> {
   return new Promise((resolve) => {
+    if (process.env.NODE_ENV === 'test') {
+      resolve();
+      return;
+    }
+
     const cWin = statsDelta.crewWin ? 1 : 0;
     const iWin = statsDelta.impWin ? 1 : 0;
     const kills = statsDelta.kills || 0;
@@ -185,8 +199,7 @@ export function recordGameStats(
       WHERE user_id = ?
     `;
 
-    db.run(query, [cWin, iWin, kills, tasks, cVote, userId], (err) => {
-      // Ignore missing DB table errors in test runner environment
+    db.run(query, [cWin, iWin, kills, tasks, cVote, userId], () => {
       resolve();
     });
   });

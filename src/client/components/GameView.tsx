@@ -55,21 +55,20 @@ export const GameView: React.FC<Props> = ({
 
   // Canvas & Input Handler Setup
   useEffect(() => {
-    if (canvasRef.current) {
-      canvasRef.current.width = window.innerWidth;
-      canvasRef.current.height = window.innerHeight;
-      rendererRef.current = new Renderer(canvasRef.current);
-      inputHandlerRef.current = new InputHandler();
+    if (!canvasRef.current) return;
+    canvasRef.current.width = window.innerWidth;
+    canvasRef.current.height = window.innerHeight;
+    rendererRef.current = new Renderer(canvasRef.current);
+    inputHandlerRef.current = new InputHandler();
 
-      const handleResize = () => {
-        if (canvasRef.current) {
-          canvasRef.current.width = window.innerWidth;
-          canvasRef.current.height = window.innerHeight;
-        }
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
+    const handleResize = () => {
+      if (canvasRef.current) {
+        canvasRef.current.width = window.innerWidth;
+        canvasRef.current.height = window.innerHeight;
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Main 60 FPS Render & Movement & Interaction Check Loop

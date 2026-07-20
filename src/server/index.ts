@@ -275,6 +275,76 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
+  socket.on(SOCKET_EVENTS.C2S_TOGGLE_READY, () => {
+    if (!currentRoomCode || !userId) return;
+    const room = roomManager.getRoom(currentRoomCode);
+    if (room && !room.inGame) {
+      const player = room.players.get(userId);
+      if (player) {
+        player.isReady = !player.isReady;
+        io.to(room.code).emit(SOCKET_EVENTS.S2C_ROOM_UPDATED, room.getSummary());
+      }
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.C2S_LEAVE_ROOM, () => {
+    if (!currentRoomCode || !userId) return;
+    const room = roomManager.getRoom(currentRoomCode);
+    if (room) {
+      room.removePlayer(userId);
+      socket.leave(room.code);
+      currentRoomCode = null;
+      if (room.players.size === 0) {
+        roomManager.deleteRoom(room.code);
+      } else {
+        io.to(room.code).emit(SOCKET_EVENTS.S2C_ROOM_UPDATED, room.getSummary());
+      }
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.C2S_KICK_PLAYER, (data: { playerId: string }) => {
+    if (!currentRoomCode || !userId) return;
+    const room = roomManager.getRoom(currentRoomCode);
+    if (room && !room.inGame) {
+      const host = Array.from(room.players.values()).find(p => p.isHost);
+      if (host?.id === userId && data.playerId !== userId) {
+        const target = room.players.get(data.playerId);
+        if (target && target.socketId) {
+          const targetSocket = io.sockets.sockets.get(target.socketId);
+          if (targetSocket) {
+            targetSocket.emit(SOCKET_EVENTS.S2C_ERROR, { message: 'Você foi expulso da sala pelo anfitrião.' });
+            targetSocket.leave(room.code);
+          }
+        }
+        room.removePlayer(data.playerId);
+        io.to(room.code).emit(SOCKET_EVENTS.S2C_ROOM_UPDATED, room.getSummary());
+      }
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.C2S_RECONNECT, (data: { userId: string; roomCode: string }) => {
+    userId = data.userId;
+    const room = roomManager.getRoom(data.roomCode);
+    if (!room) {
+      socket.emit(SOCKET_EVENTS.S2C_ERROR, { message: 'Sessão expirada ou sala inexistente.' });
+      return;
+    }
+
+    const player = room.handleReconnect(userId, socket.id);
+    if (player) {
+      currentRoomCode = room.code;
+      socket.join(room.code);
+      socket.emit(SOCKET_EVENTS.S2C_ROOM_JOINED, { roomCode: room.code, summary: room.getSummary() });
+      socket.emit(SOCKET_EVENTS.S2C_RECONNECTED, { roomCode: room.code, summary: room.getSummary(), inGame: room.inGame });
+      io.to(room.code).emit(SOCKET_EVENTS.S2C_ROOM_UPDATED, room.getSummary());
+      if (room.inGame && room.gameEngine) {
+        broadcastGameState(room);
+      }
+    } else {
+      socket.emit(SOCKET_EVENTS.S2C_ERROR, { message: 'Jogador não encontrado na sala.' });
+    }
+  });
+
   socket.on(SOCKET_EVENTS.C2S_SEND_CHAT, (data: { text: string }) => {
     if (!currentRoomCode || !userId) return;
     const room = roomManager.getRoom(currentRoomCode);
@@ -287,11 +357,16 @@ io.on('connection', (socket: Socket) => {
     if (currentRoomCode && userId) {
       const room = roomManager.getRoom(currentRoomCode);
       if (room) {
-        room.removePlayer(userId);
-        if (room.players.size === 0) {
-          roomManager.deleteRoom(currentRoomCode);
-        } else {
+        if (room.inGame) {
+          room.handleDisconnect(userId);
           io.to(room.code).emit(SOCKET_EVENTS.S2C_ROOM_UPDATED, room.getSummary());
+        } else {
+          room.removePlayer(userId);
+          if (room.players.size === 0) {
+            roomManager.deleteRoom(currentRoomCode);
+          } else {
+            io.to(room.code).emit(SOCKET_EVENTS.S2C_ROOM_UPDATED, room.getSummary());
+          }
         }
       }
     }

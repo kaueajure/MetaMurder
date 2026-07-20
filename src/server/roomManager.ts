@@ -12,6 +12,7 @@ export interface RoomPlayer {
   skinId: string;
   isHost: boolean;
   isReady: boolean;
+  disconnectedAt?: number | null;
 }
 
 export class Room {
@@ -30,12 +31,12 @@ export class Room {
   }
 
   public addPlayer(player: RoomPlayer): boolean {
-    if (this.players.size >= this.settings.maxPlayers) {
+    if (this.players.size >= this.settings.maxPlayers && !this.players.has(player.id)) {
       return false;
     }
 
     // Ensure unique color assignment
-    const usedColors = new Set(Array.from(this.players.values()).map(p => p.color));
+    const usedColors = new Set(Array.from(this.players.values()).filter(p => p.id !== player.id).map(p => p.color));
     const availableColor = PLAYER_COLORS.find(c => !usedColors.has(c.id));
     if (availableColor) {
       player.color = availableColor.id;
@@ -43,6 +44,31 @@ export class Room {
 
     this.players.set(player.id, player);
     return true;
+  }
+
+  public handleDisconnect(playerId: string): void {
+    const player = this.players.get(playerId);
+    if (!player) return;
+    if (player.isBot) {
+      this.removePlayer(playerId);
+      return;
+    }
+    player.disconnectedAt = Date.now();
+    player.socketId = null;
+  }
+
+  public handleReconnect(playerId: string, socketId: string): RoomPlayer | null {
+    const player = this.players.get(playerId);
+    if (!player) return null;
+    player.disconnectedAt = null;
+    player.socketId = socketId;
+    if (this.gameEngine) {
+      const gPlayer = this.gameEngine.players.get(playerId);
+      if (gPlayer) {
+        gPlayer.socketId = socketId;
+      }
+    }
+    return player;
   }
 
   public removePlayer(playerId: string): void {

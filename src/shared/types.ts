@@ -72,7 +72,7 @@ export interface PlayerTask {
   completed: boolean;
 }
 
-export type SabotageType = 'LIGHTS' | 'REACTOR' | 'O2' | 'DOORS_CAFETERIA' | 'DOORS_ELECTRICAL' | 'DOORS_REACTOR';
+export type SabotageType = 'LIGHTS' | 'REACTOR' | 'O2' | 'COMMS' | 'DOORS_CAFETERIA' | 'DOORS_ELECTRICAL' | 'DOORS_REACTOR';
 
 export interface SabotageState {
   activeType: SabotageType | null;

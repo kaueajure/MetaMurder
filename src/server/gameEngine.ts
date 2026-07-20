@@ -445,6 +445,8 @@ export class GameEngine {
       this.sabotage.activeType = null;
     } else if (this.sabotage.activeType === 'O2' && this.sabotage.resolvedNodes.length >= 2) {
       this.sabotage.activeType = null;
+    } else if (this.sabotage.activeType === 'COMMS' && this.sabotage.resolvedNodes.includes('COMMS_CONSOLE')) {
+      this.sabotage.activeType = null;
     }
   }
 

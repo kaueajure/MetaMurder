@@ -19,6 +19,7 @@ export const App: React.FC = () => {
   const [inGame, setInGame] = useState<boolean>(false);
   const [gameState, setGameState] = useState<S2CGameStatePayload | null>(null);
   const [gameOver, setGameOver] = useState<S2CGameOverPayload | null>(null);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
 
   // Modals
   const [showCustomize, setShowCustomize] = useState(false);
@@ -38,7 +39,14 @@ export const App: React.FC = () => {
           setProfile(data.profile);
           localStorage.setItem('mm_guest_id', data.profile.id);
           socket.emit(SOCKET_EVENTS.C2S_AUTHENTICATE, { userId: data.profile.id, name: data.profile.username });
-          socket.emit(SOCKET_EVENTS.C2S_GET_ROOMS);
+          
+          // Auto reconnect if room code exists in session
+          const savedRoom = sessionStorage.getItem('mm_room_code');
+          if (savedRoom) {
+            socket.emit(SOCKET_EVENTS.C2S_RECONNECT, { userId: data.profile.id, roomCode: savedRoom });
+          } else {
+            socket.emit(SOCKET_EVENTS.C2S_GET_ROOMS);
+          }
         }
       })
       .catch(console.error);
@@ -46,13 +54,36 @@ export const App: React.FC = () => {
 
   // Socket Event Listeners
   useEffect(() => {
+    const handleConnect = () => {
+      setIsReconnecting(false);
+      const savedRoom = sessionStorage.getItem('mm_room_code');
+      const savedUser = localStorage.getItem('mm_guest_id');
+      if (savedRoom && savedUser) {
+        socket.emit(SOCKET_EVENTS.C2S_RECONNECT, { userId: savedUser, roomCode: savedRoom });
+      }
+    };
+
+    const handleDisconnect = () => {
+      setIsReconnecting(true);
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
     socket.on(SOCKET_EVENTS.S2C_ROOM_LIST, (rooms: RoomSummary[]) => {
       setPublicRooms(rooms);
     });
 
     socket.on(SOCKET_EVENTS.S2C_ROOM_JOINED, (data: { roomCode: string; summary: RoomSummary }) => {
       setCurrentRoom(data.summary);
+      sessionStorage.setItem('mm_room_code', data.roomCode);
       setGameOver(null);
+    });
+
+    socket.on(SOCKET_EVENTS.S2C_RECONNECTED, (data: { roomCode: string; summary: RoomSummary; inGame: boolean }) => {
+      setCurrentRoom(data.summary);
+      setInGame(data.inGame);
+      setIsReconnecting(false);
     });
 
     socket.on(SOCKET_EVENTS.S2C_ROOM_UPDATED, (summary: RoomSummary) => {
@@ -77,8 +108,11 @@ export const App: React.FC = () => {
     });
 
     return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
       socket.off(SOCKET_EVENTS.S2C_ROOM_LIST);
       socket.off(SOCKET_EVENTS.S2C_ROOM_JOINED);
+      socket.off(SOCKET_EVENTS.S2C_RECONNECTED);
       socket.off(SOCKET_EVENTS.S2C_ROOM_UPDATED);
       socket.off(SOCKET_EVENTS.S2C_GAME_STARTED);
       socket.off(SOCKET_EVENTS.S2C_GAME_STATE);
@@ -99,6 +133,11 @@ export const App: React.FC = () => {
   if (inGame && gameState) {
     return (
       <>
+        {isReconnecting && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-amber-950/90 border border-amber-600/80 text-amber-300 px-4 py-2 rounded-xl text-xs font-mono font-bold shadow-2xl z-[100] flex items-center gap-2 animate-pulse">
+            <span>⚠️</span> Reconectando ao servidor...
+          </div>
+        )}
         <GameView
           self={gameState.self}
           players={gameState.players}

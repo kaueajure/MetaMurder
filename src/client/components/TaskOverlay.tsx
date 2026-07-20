@@ -182,21 +182,20 @@ const DownloadMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    if (downloading && progress < 100) {
-      const timer = setInterval(() => {
-        setProgress(p => {
-          if (p >= 100) {
-            clearInterval(timer);
-            soundEngine.playTaskComplete();
-            onComplete();
-            return 100;
-          }
-          return p + 5;
-        });
-      }, 150);
-      return () => clearInterval(timer);
-    }
-  }, [downloading, progress]);
+    if (!downloading || progress >= 100) return;
+    const timer = setInterval(() => {
+      setProgress(p => {
+        if (p >= 100) {
+          clearInterval(timer);
+          soundEngine.playTaskComplete();
+          onComplete();
+          return 100;
+        }
+        return p + 5;
+      });
+    }, 150);
+    return () => clearInterval(timer);
+  }, [downloading, progress, onComplete]);
 
   return (
     <div className="py-6 text-center">

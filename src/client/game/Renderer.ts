@@ -245,34 +245,91 @@ export class Renderer {
     const isMoving = Math.abs(player.vx) > 5 || Math.abs(player.vy) > 5;
     const bounceY = isMoving ? Math.sin(Date.now() / 80) * 4 : 0;
 
-    // 1. Oxygen Backpack
+    // 1. Oxygen Backpack & Base Skin
     ctx.fillStyle = colorObj.darkHex;
     ctx.fillRect(-22, -18 + bounceY, 10, 26);
 
-    // 2. Main Body Capsule
     ctx.fillStyle = colorObj.hex;
     ctx.beginPath();
     ctx.roundRect(-15, -28 + bounceY, 30, 42, 14);
     ctx.fill();
 
+    // 2. Render Skin modifications
+    if (player.skinId === 'CYBER_ARMOR') {
+      ctx.fillStyle = '#475569';
+      ctx.beginPath(); ctx.roundRect(-16, -10 + bounceY, 32, 24, 8); ctx.fill();
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillRect(-8, -5 + bounceY, 16, 4);
+    } else if (player.skinId === 'LAB_COAT') {
+      ctx.fillStyle = '#F1F5F9';
+      ctx.beginPath(); ctx.roundRect(-16, -15 + bounceY, 32, 30, 4); ctx.fill();
+      ctx.fillStyle = '#CBD5E1';
+      ctx.fillRect(0, -15 + bounceY, 2, 30);
+    } else if (player.skinId === 'STEALTH_SUIT') {
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath(); ctx.roundRect(-16, -28 + bounceY, 32, 42, 14); ctx.fill();
+    }
+
     // 3. Glass Visor
-    ctx.fillStyle = '#38BDF8'; // Cyan reflection
+    ctx.fillStyle = '#38BDF8';
     ctx.beginPath();
     ctx.roundRect(2, -22 + bounceY, 16, 16, 6);
     ctx.fill();
-
-    // Visor highlight arc
     ctx.fillStyle = '#E0F2FE';
-    ctx.beginPath();
-    ctx.arc(8, -18 + bounceY, 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(8, -18 + bounceY, 3, 0, Math.PI * 2); ctx.fill();
+
+    // 4. Render Hats
+    if (player.hatId === 'CAPTAIN_HAT') {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.beginPath(); ctx.ellipse(0, -28 + bounceY, 18, 6, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#1E293B';
+      ctx.beginPath(); ctx.ellipse(0, -32 + bounceY, 14, 8, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#FACC15'; ctx.fillRect(-3, -34 + bounceY, 6, 4);
+    } else if (player.hatId === 'CROWN') {
+      ctx.fillStyle = '#FACC15';
+      ctx.beginPath();
+      ctx.moveTo(-12, -28 + bounceY);
+      ctx.lineTo(-15, -42 + bounceY); ctx.lineTo(-6, -34 + bounceY);
+      ctx.lineTo(0, -45 + bounceY); ctx.lineTo(6, -34 + bounceY);
+      ctx.lineTo(15, -42 + bounceY); ctx.lineTo(12, -28 + bounceY);
+      ctx.closePath(); ctx.fill();
+    } else if (player.hatId === 'VR_GOGGLES') {
+      ctx.fillStyle = '#1E293B';
+      ctx.beginPath(); ctx.roundRect(-2, -24 + bounceY, 22, 12, 4); ctx.fill();
+      ctx.fillStyle = '#EF4444';
+      ctx.fillRect(2, -22 + bounceY, 14, 2);
+    } else if (player.hatId === 'VIKING_HELMET') {
+      ctx.fillStyle = '#94A3B8';
+      ctx.beginPath(); ctx.arc(0, -28 + bounceY, 14, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#F8FAFC'; // Horns
+      ctx.beginPath(); ctx.moveTo(-10, -28 + bounceY); ctx.quadraticCurveTo(-20, -40 + bounceY, -25, -35 + bounceY); ctx.lineTo(-14, -28 + bounceY); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(10, -28 + bounceY); ctx.quadraticCurveTo(20, -40 + bounceY, 25, -35 + bounceY); ctx.lineTo(14, -28 + bounceY); ctx.fill();
+    } else if (player.hatId === 'ANTENNA') {
+      ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, -28 + bounceY); ctx.lineTo(0, -45 + bounceY); ctx.stroke();
+      ctx.fillStyle = '#10B981';
+      ctx.beginPath(); ctx.arc(0, -45 + bounceY, 4, 0, Math.PI*2); ctx.fill();
+    } else if (player.hatId === 'HEADPHONES') {
+      ctx.strokeStyle = '#334155'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, -24 + bounceY, 16, Math.PI, 0); ctx.stroke();
+      ctx.fillStyle = '#EF4444';
+      ctx.fillRect(-20, -26 + bounceY, 6, 12);
+      ctx.fillRect(14, -26 + bounceY, 6, 12);
+    } else if (player.hatId === 'CAT_EARS') {
+      ctx.fillStyle = colorObj.hex;
+      ctx.beginPath(); ctx.moveTo(-12, -26 + bounceY); ctx.lineTo(-16, -38 + bounceY); ctx.lineTo(-4, -28 + bounceY); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(12, -26 + bounceY); ctx.lineTo(16, -38 + bounceY); ctx.lineTo(4, -28 + bounceY); ctx.fill();
+      ctx.fillStyle = '#F472B6';
+      ctx.beginPath(); ctx.moveTo(-11, -27 + bounceY); ctx.lineTo(-14, -35 + bounceY); ctx.lineTo(-6, -29 + bounceY); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(11, -27 + bounceY); ctx.lineTo(14, -35 + bounceY); ctx.lineTo(6, -29 + bounceY); ctx.fill();
+    }
 
     // Reset flip scale for name text
     if (facingLeft) {
       ctx.scale(-1, 1);
     }
 
-    // 4. Player Name Tag
+    // 5. Player Name Tag
     ctx.font = 'bold 14px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = isSelf ? '#FACC15' : '#FFFFFF';
@@ -290,15 +347,23 @@ export class Renderer {
     const canvasWidth = this.canvas.width;
     const canvasHeight = this.canvas.height;
 
-    // Draw dark radial gradient mask around self
-    const grad = this.ctx.createRadialGradient(self.x, self.y, visionRadius * 0.5, self.x, self.y, visionRadius);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    grad.addColorStop(1, 'rgba(9, 13, 22, 0.95)');
+    // Create a massive darkness overlay covering everything outside the camera
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.98)';
+    ctx.fillRect(self.x - canvasWidth, self.y - canvasHeight, canvasWidth * 2, canvasHeight * 2);
 
-    this.ctx.fillStyle = grad;
-    this.ctx.beginPath();
-    this.ctx.arc(self.x, self.y, visionRadius, 0, Math.PI * 2);
-    this.ctx.rect(self.x + canvasWidth, self.y - canvasHeight, -canvasWidth * 2, canvasHeight * 2);
-    this.ctx.fill('evenodd');
+    // Erase the vision circle using composite operation
+    ctx.globalCompositeOperation = 'destination-out';
+    
+    const grad = ctx.createRadialGradient(self.x, self.y, visionRadius * 0.4, self.x, self.y, visionRadius);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(self.x, self.y, visionRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Reset composite operation
+    ctx.globalCompositeOperation = 'source-over';
   }
 }

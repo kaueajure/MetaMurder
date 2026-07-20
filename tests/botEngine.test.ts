@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { GameEngine } from '../src/server/gameEngine';
-import { BotEngine } from '../src/server/botEngine';
+import { BotEngine, findAStarPath, WAYPOINTS } from '../src/server/botEngine';
 import { DEFAULT_GAME_SETTINGS } from '../src/shared/constants';
 import { RoomPlayer } from '../src/server/roomManager';
 
@@ -24,6 +24,25 @@ describe('BotEngine AI Logic', () => {
       expect(bot.tasks.length).toBeGreaterThan(0);
     } else {
       expect(bot.tasks.length).toBe(0);
+    }
+  });
+
+  it('should find valid A* paths between all 11 rooms in the map graph', () => {
+    const roomKeys = [
+      'CAFETERIA', 'NAVIGATION', 'SECURITY', 'REACTOR',
+      'UPPER_ENGINE', 'MEDBAY', 'WEAPONS', 'ELECTRICAL',
+      'LOWER_ENGINE', 'STORAGE', 'ADMIN'
+    ];
+
+    for (const startRoom of roomKeys) {
+      for (const endRoom of roomKeys) {
+        if (startRoom === endRoom) continue;
+        const path = findAStarPath(WAYPOINTS[startRoom], WAYPOINTS[endRoom]);
+        expect(path.length).toBeGreaterThan(1);
+        const destination = path[path.length - 1];
+        expect(destination.x).toBe(WAYPOINTS[endRoom].x);
+        expect(destination.y).toBe(WAYPOINTS[endRoom].y);
+      }
     }
   });
 });

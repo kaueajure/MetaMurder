@@ -76,6 +76,22 @@ export const CustomizeView: React.FC<Props> = ({ initial, onSave, onClose }) => 
           </div>
         </div>
 
+        {/* Skins Picker */}
+        <div className="mb-6">
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">TRAJES (SKINS)</label>
+          <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+            {SKINS.map(s => (
+              <button
+                key={s.id}
+                onClick={() => { soundEngine.playButtonClick(); setSkinId(s.id); }}
+                className={`p-2.5 rounded-xl border text-xs font-bold text-left transition-all ${skinId === s.id ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'}`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <button
           onClick={handleSave}
           className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 font-bold rounded-xl text-white shadow-lg transition-all"

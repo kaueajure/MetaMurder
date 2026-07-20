@@ -58,7 +58,7 @@ describe('GameEngine Rules', () => {
     const p3 = engine.players.get('p3')!;
 
     // Initiate meeting
-    p1.x = 1000; p1.y = 500;
+    p1.x = 1100; p1.y = 650;
     engine.callEmergencyMeeting('p1');
     expect(engine.phase).toBe('MEETING');
 

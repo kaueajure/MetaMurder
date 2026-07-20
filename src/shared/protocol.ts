@@ -27,6 +27,7 @@ export const SOCKET_EVENTS = {
   C2S_KICK_PLAYER: 'c2s_kick_player',
   C2S_ADD_BOT: 'c2s_add_bot',
   C2S_REMOVE_BOT: 'c2s_remove_bot',
+  C2S_RECONNECT: 'c2s_reconnect',
   
   // Game Actions Client -> Server
   C2S_MOVE: 'c2s_move',
@@ -51,6 +52,7 @@ export const SOCKET_EVENTS = {
   S2C_MEETING_ENDED: 's2c_meeting_ended',
   S2C_CHAT_MESSAGE: 's2c_chat_message',
   S2C_GAME_OVER: 's2c_game_over',
+  S2C_RECONNECTED: 's2c_reconnected',
   S2C_ERROR: 's2c_error'
 } as const;
 
@@ -70,6 +72,8 @@ export interface S2CGameStatePayload {
   sabotage: SabotageState;
   totalTaskCount: number;
   completedTaskCount: number;
+  meeting?: MeetingState | null;
+  chat?: ChatMessage[];
 }
 
 export interface S2CGameOverPayload {
