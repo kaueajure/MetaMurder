@@ -169,24 +169,39 @@ export class Renderer {
 
     // 3. Task Stations
     TASK_DEFINITIONS.forEach(task => {
-      ctx.fillStyle = '#EAB308';
+      const isNearby = nearbyId === task.id;
+
+      // Outer glowing aura
+      ctx.fillStyle = isNearby ? 'rgba(250, 204, 21, 0.4)' : 'rgba(234, 179, 8, 0.2)';
       ctx.beginPath();
-      ctx.arc(task.x, task.y, 14, 0, Math.PI * 2);
+      ctx.arc(task.x, task.y, isNearby ? 28 : 20, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#000000';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('⚡', task.x, task.y + 4);
+      // Main station icon
+      ctx.fillStyle = isNearby ? '#FACC15' : '#EAB308';
+      ctx.beginPath();
+      ctx.arc(task.x, task.y, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
-      if (nearbyId === task.id) {
-        ctx.strokeStyle = '#FACC15';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(task.x, task.y, 22, 0, Math.PI * 2);
-        ctx.stroke();
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚡', task.x, task.y + 5);
+
+      // Floating interaction prompt text when player is near
+      if (isNearby) {
+        ctx.fillStyle = '#FACC15';
+        ctx.font = 'bold 12px system-ui, sans-serif';
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 6;
+        ctx.fillText('⚡ FAZER TAREFA [E]', task.x, task.y - 26);
+        ctx.shadowBlur = 0;
       }
     });
+
   }
 
   private renderBodies(ctx: CanvasRenderingContext2D, bodies: DeadBody[]): void {
