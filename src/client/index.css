@@ -1,0 +1,21 @@
+@layer utilities {
+  .scale-102 {
+    transform: scale(1.02);
+  }
+  .scale-115 {
+    transform: scale(1.15);
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+  touch-action: manipulation;
+  background-color: #020617;
+}
+
+canvas {
+  touch-action: none;
+}
