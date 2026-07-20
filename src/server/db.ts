@@ -61,34 +61,43 @@ export function initDb(): Promise<void> {
 
 
 
-export function getOrCreateGuest(guestId: string, name: string): Promise<UserProfile> {
-  return new Promise((resolve, reject) => {
-    const cleanName = name.trim().slice(0, 15) || `Guest_${guestId.slice(0, 4)}`;
-    
+export function getOrCreateGuest(guestId: string, name?: string): Promise<UserProfile> {
+  return new Promise((resolve) => {
+    const rawName = (name && name.trim()) ? name.trim().slice(0, 15) : '';
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const cleanName = rawName || `Tripulante_${randomSuffix}`;
+
     db.get('SELECT * FROM users WHERE id = ?', [guestId], (err, row: any) => {
-      if (err) return reject(err);
-      if (row) {
-        return getUserProfile(guestId).then(resolve).catch(reject);
+      if (!err && row) {
+        return getUserProfile(guestId).then(resolve);
       }
 
+      // Insert new guest with unique username
       db.run(
         'INSERT INTO users (id, username, is_guest) VALUES (?, ?, 1)',
         [guestId, cleanName],
         (err2) => {
-          if (err2) return reject(err2);
-          db.run(
-            'INSERT INTO user_stats (user_id) VALUES (?)',
-            [guestId],
-            (err3) => {
-              if (err3) return reject(err3);
-              getUserProfile(guestId).then(resolve).catch(reject);
-            }
-          );
+          if (err2) {
+            // Handle username constraint failure by retrying with random ID
+            const fallbackUsername = `Tripulante_${guestId.slice(-4)}_${Math.floor(100 + Math.random() * 900)}`;
+            db.run(
+              'INSERT INTO users (id, username, is_guest) VALUES (?, ?, 1)',
+              [guestId, fallbackUsername],
+              () => {
+                db.run('INSERT INTO user_stats (user_id) VALUES (?)', [guestId], () => {});
+                getUserProfile(guestId).then(resolve);
+              }
+            );
+          } else {
+            db.run('INSERT INTO user_stats (user_id) VALUES (?)', [guestId], () => {});
+            getUserProfile(guestId).then(resolve);
+          }
         }
       );
     });
   });
 }
+
 
 export function getUserProfile(userId: string): Promise<UserProfile> {
   return new Promise((resolve, reject) => {
