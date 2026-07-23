@@ -1,6 +1,17 @@
 import { PlayerPublicData, PlayerPrivateData, DeadBody, SabotageState } from '../../shared/types';
-import { ROOMS, MAP_WALLS, EMERGENCY_BUTTON_POS, TASK_DEFINITIONS, VENTS, SABOTAGE_NODES } from '../../shared/mapData';
+import {
+  BUILDING_BOUNDS,
+  CORRIDOR_AREAS,
+  MAP_BOUNDS,
+  MAP_OBSTACLES,
+  MAP_WALLS,
+  ROOMS,
+  SABOTAGE_NODES,
+  TASK_DEFINITIONS,
+  VENTS
+} from '../../shared/mapData';
 import { PLAYER_COLORS } from '../../shared/constants';
+import { drawCharacter } from './CharacterRenderer';
 
 export class Renderer {
   private canvas: HTMLCanvasElement;
@@ -36,16 +47,19 @@ export class Renderer {
     // 2. Render Rooms & Floors
     this.renderRooms(ctx);
 
-    // 3. Render Walls
+    // 3. Render furniture from the supplied floor plan.
+    this.renderFurniture(ctx);
+
+    // 4. Render Walls
     this.renderWalls(ctx);
 
-    // 4. Render Map Interactable Objects (Emergency Button, Tasks, Vents, Sabotage Nodes)
-    this.renderMapObjects(ctx, nearbyInteractable);
+    // 5. Render Map Interactable Objects
+    this.renderMapObjects(ctx, nearbyInteractable, self);
 
-    // 5. Render Dead Bodies
+    // 6. Render Dead Bodies
     this.renderBodies(ctx, bodies);
 
-    // 6. Render Players
+    // 7. Render Players
     players.forEach(player => {
       // Don't render self if dead and looking at alive world, or render ghosts with transparency
       if (player.inVent) return; // Hidden inside vent
@@ -54,7 +68,7 @@ export class Renderer {
       this.renderPlayerCharacter(ctx, player, isSelf);
     });
 
-    // 7. Render Fog of War / Vision Shadow (if Lights sabotage active or normal vision cutoff)
+    // 8. Render Fog of War / Vision Shadow (if Lights sabotage active or normal vision cutoff)
     if (self.state === 'ALIVE') {
       this.renderFogOfWar(ctx, self, sabotage);
     }
@@ -63,26 +77,102 @@ export class Renderer {
   }
 
   private renderSpaceGrid(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = '#090D16';
-    ctx.fillRect(-500, -500, 3000, 2200);
+    const mapCenterX = MAP_BOUNDS.width / 2;
+    const mapCenterY = MAP_BOUNDS.height / 2;
+    const voidGradient = ctx.createRadialGradient(mapCenterX, mapCenterY, 180, mapCenterX, mapCenterY, 1450);
+    voidGradient.addColorStop(0, '#111d31');
+    voidGradient.addColorStop(0.58, '#07101d');
+    voidGradient.addColorStop(1, '#02050c');
+    ctx.fillStyle = voidGradient;
+    ctx.fillRect(-500, -500, MAP_BOUNDS.width + 1000, MAP_BOUNDS.height + 1000);
 
-    // Subtle starfield points
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    for (let x = -400; x < 2800; x += 120) {
-      for (let y = -400; y < 2000; y += 120) {
-        ctx.fillRect(x + ((x * 7) % 50), y + ((y * 11) % 50), 2, 2);
-      }
+    // Base shadow follows the footprint of the supplied building plan.
+    ctx.fillStyle = '#02050b';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 36;
+    ctx.fillRect(
+      BUILDING_BOUNDS.x - 10,
+      BUILDING_BOUNDS.y - 10,
+      BUILDING_BOUNDS.width + 20,
+      BUILDING_BOUNDS.height + 20
+    );
+    ctx.shadowBlur = 0;
+
+    // The long central corridor is the circulation spine of the new map.
+    const deck = ctx.createLinearGradient(0, 0, MAP_BOUNDS.width, MAP_BOUNDS.height);
+    deck.addColorStop(0, '#152338');
+    deck.addColorStop(0.5, '#0b1627');
+    deck.addColorStop(1, '#111c2d');
+    ctx.fillStyle = deck;
+    CORRIDOR_AREAS.forEach(area => ctx.fillRect(area.x, area.y, area.width, area.height));
+
+    // Recessed panels are clipped visually to the corridor.
+    ctx.save();
+    ctx.beginPath();
+    CORRIDOR_AREAS.forEach(area => ctx.rect(area.x, area.y, area.width, area.height));
+    ctx.clip();
+    ctx.lineWidth = 1;
+    for (let x = 60; x < MAP_BOUNDS.width - 40; x += 80) {
+      ctx.strokeStyle = x % 160 === 60 ? 'rgba(103,232,249,.07)' : 'rgba(255,255,255,.025)';
+      ctx.beginPath();
+      ctx.moveTo(x, BUILDING_BOUNDS.y);
+      ctx.lineTo(x, BUILDING_BOUNDS.y + BUILDING_BOUNDS.height);
+      ctx.stroke();
     }
+    for (let y = 60; y < MAP_BOUNDS.height - 40; y += 80) {
+      ctx.strokeStyle = y % 160 === 60 ? 'rgba(255,255,255,.045)' : 'rgba(0,0,0,.18)';
+      ctx.beginPath();
+      ctx.moveTo(BUILDING_BOUNDS.x, y);
+      ctx.lineTo(BUILDING_BOUNDS.x + BUILDING_BOUNDS.width, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Directional guide lights embedded in the deck.
+    ctx.shadowColor = '#22d3ee';
+    ctx.shadowBlur = 9;
+    ctx.fillStyle = 'rgba(34,211,238,.48)';
+    for (let x = 100; x < MAP_BOUNDS.width - 80; x += 180) {
+      ctx.fillRect(x, 573, 42, 3);
+      ctx.fillRect(x, 634, 42, 3);
+    }
+    ctx.shadowBlur = 0;
   }
 
   private renderRooms(ctx: CanvasRenderingContext2D): void {
     ROOMS.forEach(room => {
-      // Room floor
-      ctx.fillStyle = room.color;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.72)';
+      ctx.shadowBlur = 22;
+      ctx.shadowOffsetY = 12;
+      ctx.fillStyle = '#030712';
+      ctx.fillRect(room.x - 5, room.y - 5, room.width + 10, room.height + 10);
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      const floor = ctx.createLinearGradient(room.x, room.y, room.x + room.width, room.y + room.height);
+      floor.addColorStop(0, lightenHex(room.color, 18));
+      floor.addColorStop(0.48, room.color);
+      floor.addColorStop(1, '#080f1c');
+      ctx.fillStyle = floor;
       ctx.fillRect(room.x, room.y, room.width, room.height);
 
-      // Floor grid tiles pattern
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      // Bevel: bright top/left, recessed lower/right.
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(148, 230, 255, .22)';
+      ctx.beginPath();
+      ctx.moveTo(room.x + 2, room.y + room.height - 2);
+      ctx.lineTo(room.x + 2, room.y + 2);
+      ctx.lineTo(room.x + room.width - 2, room.y + 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,.48)';
+      ctx.beginPath();
+      ctx.moveTo(room.x + room.width - 2, room.y + 2);
+      ctx.lineTo(room.x + room.width - 2, room.y + room.height - 2);
+      ctx.lineTo(room.x + 2, room.y + room.height - 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
       ctx.lineWidth = 1;
       for (let gx = room.x; gx < room.x + room.width; gx += 50) {
         ctx.beginPath();
@@ -98,52 +188,133 @@ export class Renderer {
       }
 
       // Room Name Label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.font = 'bold 22px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(226, 244, 255, 0.3)';
+      ctx.font = '800 18px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(room.name.toUpperCase(), room.x + room.width / 2, room.y + room.height / 2);
+      ctx.restore();
+    });
+
+    ctx.fillStyle = 'rgba(103, 232, 249, .24)';
+    ctx.font = '900 16px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORREDOR', MAP_BOUNDS.width / 2, 615);
+  }
+
+  private renderFurniture(ctx: CanvasRenderingContext2D): void {
+    MAP_OBSTACLES.forEach(obstacle => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.65)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 7;
+
+      const gradient = ctx.createLinearGradient(
+        obstacle.x,
+        obstacle.y,
+        obstacle.x + obstacle.width,
+        obstacle.y + obstacle.height
+      );
+      if (obstacle.kind === 'PLANTER') {
+        gradient.addColorStop(0, '#1d5b42');
+        gradient.addColorStop(1, '#0f2e28');
+      } else if (obstacle.kind === 'CAR') {
+        gradient.addColorStop(0, obstacle.id.endsWith('_w') ? '#18202d' : '#d5dde4');
+        gradient.addColorStop(1, obstacle.id.endsWith('_w') ? '#05070d' : '#64748b');
+      } else if (obstacle.kind === 'SERVER_RACK') {
+        gradient.addColorStop(0, '#312e81');
+        gradient.addColorStop(1, '#111827');
+      } else {
+        gradient.addColorStop(0, '#64748b');
+        gradient.addColorStop(1, '#1e293b');
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.roundRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height, obstacle.kind === 'CAR' ? 28 : 8);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = 'rgba(186,230,253,.28)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      if (obstacle.kind === 'PLANTER') {
+        ctx.fillStyle = '#4ade80';
+        for (let x = obstacle.x + 15; x < obstacle.x + obstacle.width; x += 28) {
+          for (let y = obstacle.y + 15; y < obstacle.y + obstacle.height; y += 32) {
+            ctx.beginPath();
+            ctx.arc(x, y, 7, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      } else if (obstacle.kind === 'CAR') {
+        ctx.fillStyle = 'rgba(103,232,249,.38)';
+        ctx.beginPath();
+        ctx.roundRect(obstacle.x + 16, obstacle.y + 32, obstacle.width - 32, 48, 14);
+        ctx.fill();
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(obstacle.x - 5, obstacle.y + 35, 9, 38);
+        ctx.fillRect(obstacle.x + obstacle.width - 4, obstacle.y + 35, 9, 38);
+        ctx.fillRect(obstacle.x - 5, obstacle.y + obstacle.height - 73, 9, 38);
+        ctx.fillRect(obstacle.x + obstacle.width - 4, obstacle.y + obstacle.height - 73, 9, 38);
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,.12)';
+        ctx.lineWidth = 1;
+        const divisions = obstacle.kind === 'SERVER_RACK' || obstacle.kind === 'SHELF' ? 5 : 3;
+        for (let index = 1; index < divisions; index++) {
+          const x = obstacle.x + obstacle.width * index / divisions;
+          ctx.beginPath();
+          ctx.moveTo(x, obstacle.y + 5);
+          ctx.lineTo(x, obstacle.y + obstacle.height - 5);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
     });
   }
 
   private renderWalls(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = '#38BDF8'; // Cyan sci-fi wall borders
-    ctx.lineWidth = 6;
-    ctx.shadowColor = '#0284C7';
-    ctx.shadowBlur = 8;
-
     MAP_WALLS.forEach(wall => {
+      // Thick structural rail.
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 15;
+      ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(wall.x1, wall.y1);
       ctx.lineTo(wall.x2, wall.y2);
       ctx.stroke();
-    });
 
-    ctx.shadowBlur = 0; // reset shadow
+      const rail = ctx.createLinearGradient(wall.x1, wall.y1, wall.x2 || wall.x1 + 1, wall.y2 || wall.y1 + 1);
+      rail.addColorStop(0, '#334155');
+      rail.addColorStop(0.45, '#0f2034');
+      rail.addColorStop(1, '#1e3a4f');
+      ctx.strokeStyle = rail;
+      ctx.lineWidth = 9;
+      ctx.beginPath();
+      ctx.moveTo(wall.x1, wall.y1);
+      ctx.lineTo(wall.x2, wall.y2);
+      ctx.stroke();
+
+      // Thin emissive strip.
+      ctx.strokeStyle = 'rgba(103,232,249,.72)';
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = '#22d3ee';
+      ctx.shadowBlur = 7;
+      ctx.beginPath();
+      ctx.moveTo(wall.x1, wall.y1);
+      ctx.lineTo(wall.x2, wall.y2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    });
+    ctx.lineCap = 'butt';
   }
 
-  private renderMapObjects(ctx: CanvasRenderingContext2D, nearbyId: string | null): void {
-    // 1. Emergency Meeting Button Table
-    ctx.fillStyle = '#1E293B';
-    ctx.beginPath();
-    ctx.arc(EMERGENCY_BUTTON_POS.x, EMERGENCY_BUTTON_POS.y, 45, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#EF4444';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    // Red Glass Dome Button
-    ctx.fillStyle = '#DC2626';
-    ctx.beginPath();
-    ctx.arc(EMERGENCY_BUTTON_POS.x, EMERGENCY_BUTTON_POS.y, 20, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (nearbyId === 'EMERGENCY_BUTTON') {
-      ctx.strokeStyle = '#FACC15';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-
-    // 2. Vents
+  private renderMapObjects(
+    ctx: CanvasRenderingContext2D,
+    nearbyId: string | null,
+    self: PlayerPrivateData
+  ): void {
+    // 1. Vents
     VENTS.forEach(vent => {
       ctx.fillStyle = '#475569';
       ctx.fillRect(vent.x - 20, vent.y - 15, 40, 30);
@@ -167,9 +338,12 @@ export class Renderer {
       }
     });
 
-    // 3. Task Stations
+    // 2. Task Stations assigned to this player
     TASK_DEFINITIONS.forEach(task => {
-      const isNearby = nearbyId === task.id;
+      const assignedTask = self.tasks.find(playerTask => playerTask.definitionId === task.id);
+      if (self.role === 'CREWMATE' && (!assignedTask || assignedTask.completed)) return;
+
+      const isNearby = nearbyId === assignedTask?.id;
 
       // Outer glowing aura
       ctx.fillStyle = isNearby ? 'rgba(250, 204, 21, 0.4)' : 'rgba(234, 179, 8, 0.2)';
@@ -227,117 +401,7 @@ export class Renderer {
   public renderPlayerCharacter(ctx: CanvasRenderingContext2D, player: PlayerPublicData, isSelf: boolean): void {
     ctx.save();
     ctx.translate(player.x, player.y);
-
-    const isGhost = player.state === 'DEAD' || player.state === 'GHOST';
-    if (isGhost) {
-      ctx.globalAlpha = 0.5;
-    }
-
-    const colorObj = PLAYER_COLORS.find(c => c.id === player.color) || PLAYER_COLORS[0];
-    const facingLeft = player.facing === 'LEFT';
-
-    // Flip horizontal if facing left
-    if (facingLeft) {
-      ctx.scale(-1, 1);
-    }
-
-    // Walking animation bounce
-    const isMoving = Math.abs(player.vx) > 5 || Math.abs(player.vy) > 5;
-    const bounceY = isMoving ? Math.sin(Date.now() / 80) * 4 : 0;
-
-    // 1. Oxygen Backpack & Base Skin
-    ctx.fillStyle = colorObj.darkHex;
-    ctx.fillRect(-22, -18 + bounceY, 10, 26);
-
-    ctx.fillStyle = colorObj.hex;
-    ctx.beginPath();
-    ctx.roundRect(-15, -28 + bounceY, 30, 42, 14);
-    ctx.fill();
-
-    // 2. Render Skin modifications
-    if (player.skinId === 'CYBER_ARMOR') {
-      ctx.fillStyle = '#475569';
-      ctx.beginPath(); ctx.roundRect(-16, -10 + bounceY, 32, 24, 8); ctx.fill();
-      ctx.fillStyle = '#38BDF8';
-      ctx.fillRect(-8, -5 + bounceY, 16, 4);
-    } else if (player.skinId === 'LAB_COAT') {
-      ctx.fillStyle = '#F1F5F9';
-      ctx.beginPath(); ctx.roundRect(-16, -15 + bounceY, 32, 30, 4); ctx.fill();
-      ctx.fillStyle = '#CBD5E1';
-      ctx.fillRect(0, -15 + bounceY, 2, 30);
-    } else if (player.skinId === 'STEALTH_SUIT') {
-      ctx.fillStyle = '#0F172A';
-      ctx.beginPath(); ctx.roundRect(-16, -28 + bounceY, 32, 42, 14); ctx.fill();
-    }
-
-    // 3. Glass Visor
-    ctx.fillStyle = '#38BDF8';
-    ctx.beginPath();
-    ctx.roundRect(2, -22 + bounceY, 16, 16, 6);
-    ctx.fill();
-    ctx.fillStyle = '#E0F2FE';
-    ctx.beginPath(); ctx.arc(8, -18 + bounceY, 3, 0, Math.PI * 2); ctx.fill();
-
-    // 4. Render Hats
-    if (player.hatId === 'CAPTAIN_HAT') {
-      ctx.fillStyle = '#F8FAFC';
-      ctx.beginPath(); ctx.ellipse(0, -28 + bounceY, 18, 6, 0, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#1E293B';
-      ctx.beginPath(); ctx.ellipse(0, -32 + bounceY, 14, 8, 0, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#FACC15'; ctx.fillRect(-3, -34 + bounceY, 6, 4);
-    } else if (player.hatId === 'CROWN') {
-      ctx.fillStyle = '#FACC15';
-      ctx.beginPath();
-      ctx.moveTo(-12, -28 + bounceY);
-      ctx.lineTo(-15, -42 + bounceY); ctx.lineTo(-6, -34 + bounceY);
-      ctx.lineTo(0, -45 + bounceY); ctx.lineTo(6, -34 + bounceY);
-      ctx.lineTo(15, -42 + bounceY); ctx.lineTo(12, -28 + bounceY);
-      ctx.closePath(); ctx.fill();
-    } else if (player.hatId === 'VR_GOGGLES') {
-      ctx.fillStyle = '#1E293B';
-      ctx.beginPath(); ctx.roundRect(-2, -24 + bounceY, 22, 12, 4); ctx.fill();
-      ctx.fillStyle = '#EF4444';
-      ctx.fillRect(2, -22 + bounceY, 14, 2);
-    } else if (player.hatId === 'VIKING_HELMET') {
-      ctx.fillStyle = '#94A3B8';
-      ctx.beginPath(); ctx.arc(0, -28 + bounceY, 14, Math.PI, 0); ctx.fill();
-      ctx.fillStyle = '#F8FAFC'; // Horns
-      ctx.beginPath(); ctx.moveTo(-10, -28 + bounceY); ctx.quadraticCurveTo(-20, -40 + bounceY, -25, -35 + bounceY); ctx.lineTo(-14, -28 + bounceY); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(10, -28 + bounceY); ctx.quadraticCurveTo(20, -40 + bounceY, 25, -35 + bounceY); ctx.lineTo(14, -28 + bounceY); ctx.fill();
-    } else if (player.hatId === 'ANTENNA') {
-      ctx.strokeStyle = '#94A3B8'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(0, -28 + bounceY); ctx.lineTo(0, -45 + bounceY); ctx.stroke();
-      ctx.fillStyle = '#10B981';
-      ctx.beginPath(); ctx.arc(0, -45 + bounceY, 4, 0, Math.PI*2); ctx.fill();
-    } else if (player.hatId === 'HEADPHONES') {
-      ctx.strokeStyle = '#334155'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.arc(0, -24 + bounceY, 16, Math.PI, 0); ctx.stroke();
-      ctx.fillStyle = '#EF4444';
-      ctx.fillRect(-20, -26 + bounceY, 6, 12);
-      ctx.fillRect(14, -26 + bounceY, 6, 12);
-    } else if (player.hatId === 'CAT_EARS') {
-      ctx.fillStyle = colorObj.hex;
-      ctx.beginPath(); ctx.moveTo(-12, -26 + bounceY); ctx.lineTo(-16, -38 + bounceY); ctx.lineTo(-4, -28 + bounceY); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(12, -26 + bounceY); ctx.lineTo(16, -38 + bounceY); ctx.lineTo(4, -28 + bounceY); ctx.fill();
-      ctx.fillStyle = '#F472B6';
-      ctx.beginPath(); ctx.moveTo(-11, -27 + bounceY); ctx.lineTo(-14, -35 + bounceY); ctx.lineTo(-6, -29 + bounceY); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(11, -27 + bounceY); ctx.lineTo(14, -35 + bounceY); ctx.lineTo(6, -29 + bounceY); ctx.fill();
-    }
-
-    // Reset flip scale for name text
-    if (facingLeft) {
-      ctx.scale(-1, 1);
-    }
-
-    // 5. Player Name Tag
-    ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = isSelf ? '#FACC15' : '#FFFFFF';
-    ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 4;
-    ctx.fillText(player.name, 0, -36 + bounceY);
-    ctx.shadowBlur = 0;
-
+    drawCharacter(ctx, player, { isSelf, time: performance.now() });
     ctx.restore();
   }
 
@@ -368,4 +432,13 @@ export class Renderer {
 
     ctx.restore();
   }
+}
+
+function lightenHex(hex: string, amount: number): string {
+  const normalized = hex.replace('#', '');
+  const value = Number.parseInt(normalized, 16);
+  const red = Math.min(255, (value >> 16) + amount);
+  const green = Math.min(255, ((value >> 8) & 0xff) + amount);
+  const blue = Math.min(255, (value & 0xff) + amount);
+  return `rgb(${red}, ${green}, ${blue})`;
 }

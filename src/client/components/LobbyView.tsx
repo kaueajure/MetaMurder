@@ -1,7 +1,8 @@
 import React from 'react';
-import { RoomSummary, GameSettings, PlayerCustomization } from '../../shared/types';
-import { PLAYER_COLORS } from '../../shared/constants';
+import { RoomSummary, GameSettings } from '../../shared/types';
 import { soundEngine } from '../audio/soundEffects';
+import { CharacterPreview } from './CharacterPreview';
+import stationDeck from '../assets/station-command-deck.webp';
 
 interface Props {
   summary: RoomSummary;
@@ -24,137 +25,167 @@ export const LobbyView: React.FC<Props> = ({
   onUpdateSettings,
   onOpenCustomize
 }) => {
+  const copyCode = async () => {
+    soundEngine.playButtonClick();
+    await navigator.clipboard.writeText(summary.code);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-6 flex flex-col justify-between">
-      {/* Header Bar */}
-      <div className="flex justify-between items-center bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md">
-        <div>
-          <h2 className="text-2xl font-black text-cyan-400 tracking-wide">{summary.name}</h2>
-          <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-            <span>CÓDIGO DA SALA:</span>
-            <span className="bg-slate-950 border border-cyan-500/40 text-cyan-400 font-mono font-bold px-3 py-1 rounded-lg text-sm tracking-widest select-all">
-              {summary.code}
-            </span>
+    <main className="relative min-h-screen overflow-y-auto bg-[#02050b] text-white">
+      <div
+        className="fixed inset-0 bg-cover bg-center opacity-35 scale-105 blur-[2px]"
+        style={{ backgroundImage: `url(${stationDeck})` }}
+      />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(6,35,55,.38),rgba(2,5,11,.94)_72%)]" />
+
+      <div className="relative z-10 min-h-screen px-4 md:px-8 py-5 flex flex-col">
+        <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/10">
+          <div>
+            <p className="text-[9px] uppercase tracking-[.38em] text-cyan-200/60 font-bold">Sala de preparação</p>
+            <div className="flex items-center gap-3 mt-1">
+              <h1 className="text-xl md:text-2xl font-black">{summary.name}</h1>
+              <span className="flex items-center gap-1.5 text-[9px] text-emerald-300 uppercase tracking-wider">
+                <i className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                Conectado
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                soundEngine.playButtonClick();
-                navigator.clipboard.writeText(summary.code);
-                alert('Código da sala copiado para a área de transferência!');
-              }}
-              className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-700/50 text-cyan-300 font-bold text-[10px] rounded-md transition-colors"
+              onClick={() => void copyCode()}
+              className="h-11 px-4 border border-cyan-200/20 bg-cyan-300/5 hover:bg-cyan-300/10 transition-colors"
             >
-              📋 COPIAR
+              <span className="text-[8px] uppercase tracking-wider text-slate-500 mr-3">Código</span>
+              <strong className="font-mono tracking-[.25em] text-cyan-200">{summary.code}</strong>
+            </button>
+            <button
+              onClick={() => { soundEngine.playButtonClick(); onOpenCustomize(); }}
+              className="h-11 px-4 border border-amber-200/30 bg-amber-300/10 hover:bg-amber-300/20 text-xs font-black text-amber-100 transition-colors"
+            >
+              PERSONALIZAR TRAJE
+            </button>
+            <button
+              onClick={() => { soundEngine.playButtonClick(); onLeaveRoom(); }}
+              className="h-11 px-4 border border-white/10 bg-black/30 hover:bg-rose-400/10 hover:border-rose-300/30 text-xs font-bold text-slate-400 hover:text-rose-200"
+            >
+              SAIR
             </button>
           </div>
-        </div>
+        </header>
 
-        <div className="flex gap-3">
-          <button
-            onClick={() => { soundEngine.playButtonClick(); onOpenCustomize(); }}
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700"
-          >
-            🎨 PERSONALIZAR
-          </button>
-
-          <button
-            onClick={() => { soundEngine.playButtonClick(); onLeaveRoom(); }}
-            className="px-4 py-2.5 bg-rose-950/80 hover:bg-rose-900 text-rose-400 font-bold text-xs rounded-xl border border-rose-800"
-          >
-            SAIR DA SALA
-          </button>
-        </div>
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 my-6 flex-1">
-        {/* Connected Players Grid */}
-        <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-white">
-                JOGADORES NA SALA ({summary.playerCount}/{summary.maxPlayers})
-              </h3>
-
+        <div className="flex-1 w-full max-w-7xl mx-auto grid lg:grid-cols-[1fr_310px] gap-5 py-5">
+          <section className="relative min-h-[560px] border border-white/10 bg-black/25 backdrop-blur-md overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_100%,rgba(34,211,238,.12),transparent_48%)]" />
+            <div className="relative flex items-center justify-between px-5 py-3 border-b border-white/10">
+              <div>
+                <p className="text-[9px] uppercase tracking-[.28em] text-cyan-200/60 font-bold">Tripulação embarcada</p>
+                <h2 className="font-black">{summary.playerCount} / {summary.maxPlayers} jogadores</h2>
+              </div>
               {isHost && (
                 <div className="flex gap-2">
                   <button
                     onClick={() => { soundEngine.playButtonClick(); onAddBot(); }}
-                    className="px-3 py-1.5 bg-cyan-600/80 hover:bg-cyan-500 text-white font-bold text-xs rounded-lg"
+                    className="px-3 py-2 border border-cyan-200/20 bg-cyan-300/5 text-[10px] font-bold text-cyan-100 hover:bg-cyan-300/15"
                   >
-                    + ADICIONAR BOT
+                    + BOT
                   </button>
                   <button
                     onClick={() => { soundEngine.playButtonClick(); onRemoveBot(); }}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-lg border border-slate-700"
+                    className="px-3 py-2 border border-white/10 bg-white/[.03] text-[10px] font-bold text-slate-400 hover:text-white"
                   >
-                    - REMOVER BOT
+                    − BOT
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {Array.from({ length: summary.playerCount }).map((_, idx) => (
-                <div key={idx} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500 border-2 border-white/20 flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-white truncate">Jogador #{idx + 1}</div>
-                    <div className="text-[10px] text-emerald-400 font-mono">PRONTO</div>
+            <div className="relative grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 bg-[#040a12]">
+              {summary.players.map(player => (
+                <div key={player.id} className="relative h-52 bg-[#06101c]/95 overflow-hidden group border-r border-b border-white/10">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_70%,rgba(34,211,238,.1),transparent_45%)] opacity-60 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute inset-2 bottom-9">
+                    <CharacterPreview
+                      customization={{ color: player.color, hatId: player.hatId, skinId: player.skinId }}
+                    />
+                  </div>
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-3 py-2 border-t border-white/8 bg-black/45">
+                    <span>
+                      <strong className="block text-[11px] truncate max-w-28">{player.name}</strong>
+                      <small className={`text-[8px] uppercase tracking-wider ${player.isReady ? 'text-emerald-300' : 'text-amber-300'}`}>
+                        {player.isBot ? 'IA Gemini' : player.isReady ? 'Pronto' : 'Preparando'}
+                      </small>
+                    </span>
+                    {player.isHost && <span className="text-amber-300 text-xs">◆</span>}
                   </div>
                 </div>
               ))}
+              {Array.from({ length: Math.max(0, summary.maxPlayers - summary.playerCount) }).map((_, index) => (
+                <div key={`empty-${index}`} className="h-52 bg-[#040a12]/90 flex flex-col items-center justify-center text-white/10 border-r border-b border-white/10">
+                  <span className="text-3xl font-thin">＋</span>
+                  <small className="text-[8px] uppercase tracking-[.2em]">Vaga aberta</small>
+                </div>
+              ))}
             </div>
-          </div>
+          </section>
 
-          {/* Host Start Game Action */}
-          {isHost ? (
-            <button
-              onClick={() => { soundEngine.playButtonClick(); onStartGame(); }}
-              className="w-full py-4 mt-6 bg-emerald-600 hover:bg-emerald-500 font-black text-white text-lg rounded-2xl shadow-xl transition-all active:scale-98 border border-emerald-400/50"
-            >
-              INICIAR PARTIDA 🚀
-            </button>
-          ) : (
-            <div className="text-center py-4 text-xs font-mono text-slate-400 animate-pulse">
-              Aguardando o líder da sala iniciar a partida...
-            </div>
-          )}
-        </div>
+          <aside className="space-y-4">
+            <section className="border-y border-white/10 bg-black/40 backdrop-blur-lg">
+              <div className="p-5 border-b border-white/10">
+                <p className="text-[9px] uppercase tracking-[.3em] text-cyan-200/60 font-bold">Parâmetros da missão</p>
+                <h2 className="text-lg font-black mt-1">Configuração</h2>
+              </div>
+              <div className="p-5 space-y-5">
+                <label className="block">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-500 font-bold mb-2">Assassinos</span>
+                  <select
+                    disabled={!isHost}
+                    value={summary.impostorCount}
+                    onChange={event => onUpdateSettings({ impostorCount: Number(event.target.value) })}
+                    className="w-full h-11 px-3 bg-[#050b14] border border-white/10 text-sm outline-none focus:border-cyan-200/40"
+                  >
+                    <option value={1}>1 assassino</option>
+                    <option value={2}>2 assassinos</option>
+                    <option value={3}>3 assassinos</option>
+                  </select>
+                </label>
 
-        {/* Room Settings Panel */}
-        <div className="lg:col-span-1 bg-slate-900/40 border border-slate-800 rounded-2xl p-6">
-          <h3 className="text-lg font-bold text-white mb-4">CONFIGURAÇÕES DA REUNIÃO</h3>
+                <label className="block">
+                  <span className="block text-[9px] uppercase tracking-wider text-slate-500 font-bold mb-2">Acesso</span>
+                  <select
+                    disabled={!isHost}
+                    value={summary.isPrivate ? 'private' : 'public'}
+                    onChange={event => onUpdateSettings({ isPrivate: event.target.value === 'private' })}
+                    className="w-full h-11 px-3 bg-[#050b14] border border-white/10 text-sm outline-none focus:border-cyan-200/40"
+                  >
+                    <option value="public">Sala pública</option>
+                    <option value="private">Somente por código</option>
+                  </select>
+                </label>
+              </div>
+            </section>
 
-          <div className="space-y-4 text-xs font-sans">
-            <div>
-              <label className="text-slate-400 font-bold block mb-1">NÚMERO DE ASSASSINOS</label>
-              <select
-                disabled={!isHost}
-                value={summary.impostorCount}
-                onChange={e => onUpdateSettings({ impostorCount: Number(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
+            {isHost ? (
+              <button
+                onClick={() => { soundEngine.playButtonClick(); onStartGame(); }}
+                className="relative w-full min-h-24 overflow-hidden bg-emerald-300 text-[#03110c] font-black text-left px-5 hover:bg-emerald-200 transition-colors group"
               >
-                <option value={1}>1 Assassino</option>
-                <option value={2}>2 Assassinos</option>
-                <option value={3}>3 Assassinos</option>
-              </select>
-            </div>
+                <span className="block text-[9px] uppercase tracking-[.25em] opacity-60">Todos a bordo</span>
+                <span className="block text-xl mt-1">INICIAR PARTIDA →</span>
+                <span className="absolute -right-2 -bottom-7 text-8xl opacity-10 group-hover:translate-x-1 transition-transform">▶</span>
+              </button>
+            ) : (
+              <div className="p-5 border-l-2 border-amber-300 bg-amber-300/5 text-xs text-amber-100">
+                Aguardando o líder iniciar a missão…
+              </div>
+            )}
 
-            <div>
-              <label className="text-slate-400 font-bold block mb-1">VISIBILIDADE DA SALA</label>
-              <select
-                disabled={!isHost}
-                value={summary.isPrivate ? 'private' : 'public'}
-                onChange={e => onUpdateSettings({ isPrivate: e.target.value === 'private' })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white"
-              >
-                <option value="public">Pública (Aberta a todos)</option>
-                <option value="private">Privada (Apenas com código)</option>
-              </select>
-            </div>
-          </div>
+            <p className="text-[9px] leading-relaxed text-slate-600">
+              A aparência equipada nesta sala será usada pelo mesmo renderizador durante toda a partida.
+            </p>
+          </aside>
         </div>
       </div>
-    </div>
+    </main>
   );
 };

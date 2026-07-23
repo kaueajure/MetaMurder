@@ -57,9 +57,18 @@ describe('GameEngine Rules', () => {
     const p2 = engine.players.get('p2')!;
     const p3 = engine.players.get('p3')!;
 
-    // Initiate meeting
+    // Initiate a meeting by reporting a nearby body
     p1.x = 1100; p1.y = 650;
-    engine.callEmergencyMeeting('p1');
+    engine.bodies.push({
+      id: 'body_vote_test',
+      victimId: 'victim',
+      victimName: 'Victim',
+      victimColor: 'WHITE',
+      x: 1100,
+      y: 650,
+      reported: false
+    });
+    engine.reportBody('p1', 'body_vote_test');
     expect(engine.phase).toBe('MEETING');
 
     // Cast votes
@@ -69,5 +78,40 @@ describe('GameEngine Rules', () => {
 
     expect(engine.meetingState?.ejectedPlayerId).toBe('p2');
     expect(p2.state).toBe('DEAD');
+  });
+
+  it('should only complete a crewmate task while the player is at its station', () => {
+    const engine = new GameEngine('TASK01', DEFAULT_GAME_SETTINGS, roomPlayers, () => {}, () => {});
+    const crewmate = Array.from(engine.players.values()).find(player => player.role === 'CREWMATE')!;
+    const task = crewmate.tasks[0];
+
+    crewmate.x = 2300;
+    crewmate.y = 1500;
+    expect(engine.completeTask(crewmate.id, task.id)).toBe(false);
+    expect(task.completed).toBe(false);
+
+    crewmate.x = task.x;
+    crewmate.y = task.y;
+    expect(engine.completeTask(crewmate.id, task.id)).toBe(true);
+    expect(task.completed).toBe(true);
+  });
+
+  it('should reject reporting a body that was not found nearby', () => {
+    const engine = new GameEngine('REPORT01', DEFAULT_GAME_SETTINGS, roomPlayers, () => {}, () => {});
+    const reporter = engine.players.get('p1')!;
+    reporter.x = 1100;
+    reporter.y = 650;
+    engine.bodies.push({
+      id: 'far_body',
+      victimId: 'victim',
+      victimName: 'Victim',
+      victimColor: 'WHITE',
+      x: 200,
+      y: 200,
+      reported: false
+    });
+
+    expect(engine.reportBody(reporter.id, 'far_body')).toBe(false);
+    expect(engine.phase).toBe('PLAYING');
   });
 });

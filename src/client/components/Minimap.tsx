@@ -1,6 +1,6 @@
 import React from 'react';
-import { PlayerPrivateData, PlayerPublicData } from '../../shared/types';
-import { ROOMS, MAP_BOUNDS, TASK_DEFINITIONS } from '../../shared/mapData';
+import { PlayerPrivateData } from '../../shared/types';
+import { CORRIDOR_AREAS, MAP_BOUNDS, MAP_OBSTACLES, ROOMS } from '../../shared/mapData';
 
 interface Props {
   self: PlayerPrivateData;
@@ -28,6 +28,21 @@ export const Minimap: React.FC<Props> = ({ self, onClose }) => {
           className="relative bg-slate-950 rounded-xl border border-slate-800 overflow-hidden mx-auto"
           style={{ width: MAP_BOUNDS.width * scale, height: MAP_BOUNDS.height * scale }}
         >
+          {CORRIDOR_AREAS.map(area => (
+            <div
+              key={area.id}
+              className="absolute border-y border-cyan-500/30 bg-slate-800/90 flex items-center justify-center text-[8px] font-black tracking-[.35em] text-cyan-200/40"
+              style={{
+                left: area.x * scale,
+                top: area.y * scale,
+                width: area.width * scale,
+                height: area.height * scale
+              }}
+            >
+              CORREDOR
+            </div>
+          ))}
+
           {/* Rooms */}
           {ROOMS.map(room => (
             <div
@@ -43,6 +58,19 @@ export const Minimap: React.FC<Props> = ({ self, onClose }) => {
             >
               {room.name}
             </div>
+          ))}
+
+          {MAP_OBSTACLES.map(obstacle => (
+            <div
+              key={obstacle.id}
+              className="absolute border border-white/15 bg-slate-950/65"
+              style={{
+                left: obstacle.x * scale,
+                top: obstacle.y * scale,
+                width: Math.max(2, obstacle.width * scale),
+                height: Math.max(2, obstacle.height * scale)
+              }}
+            />
           ))}
 
           {/* Task Markers for Crewmates */}

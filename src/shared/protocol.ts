@@ -33,7 +33,6 @@ export const SOCKET_EVENTS = {
   C2S_MOVE: 'c2s_move',
   C2S_KILL: 'c2s_kill',
   C2S_REPORT_BODY: 'c2s_report_body',
-  C2S_CALL_MEETING: 'c2s_call_meeting',
   C2S_VENT: 'c2s_vent',
   C2S_COMPLETE_TASK: 'c2s_complete_task',
   C2S_TRIGGER_SABOTAGE: 'c2s_trigger_sabotage',

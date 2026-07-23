@@ -63,7 +63,15 @@ PORT=4000
 NODE_ENV=development
 DATABASE_PATH=./db/database.sqlite
 JWT_SECRET=metamurder_secret_key_2026
+GEMINI_API_KEY=sua_chave_do_google_ai_studio
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_ACTION_INTERVAL_MS=12000
 ```
+
+`GEMINI_API_KEY` habilita as decisões reais dos bots. A IA escolhe falas,
+respostas, votos e objetivos de movimento; colisões, alcance, recargas e alvos
+continuam validados pelo servidor. Sem uma chave válida, os bots mantêm apenas
+movimentação básica para a partida não travar e não simulam falas de IA.
 
 ---
 

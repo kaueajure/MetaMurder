@@ -17,272 +17,202 @@ export interface WallSegment {
   y2: number;
 }
 
-// ============================================================
-//  MAP: "Orbital Station Zero" - Expanded full layout
-//  Total playable area: 2400 x 1600
-//  11 rooms connected by wide corridors (80px doorways)
-//
-//  Layout (approximate):
-//
-//                  [Weapons]
-//                     |
-//  [Upper Engine] -- [MedBay] ---------- corridor
-//        |                                  |
-//  [Reactor] -- [Security] -- [Cafeteria] -- [Navigation]
-//                    |             |
-//  [Lower Engine] -- [Electrical] -- [Storage]
-//                                      |
-//                                  [Admin]
-// ============================================================
+export interface FloorArea {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
+export interface ObstacleRect {
+  id: string;
+  kind: 'SOFA' | 'TABLE' | 'PLANTER' | 'DESK' | 'SHELF' | 'SERVER_RACK' | 'CAR';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// Escritório MetaMurder, reconstruído a partir da planta baixa fornecida.
+// A mesma geometria alimenta renderização, minimapa, colisão e navegação.
 export const MAP_BOUNDS = {
   width: 2400,
-  height: 1600
+  height: 1000
 };
 
-export const EMERGENCY_BUTTON_POS: Vector2D = { x: 1100, y: 650 };
+export const BUILDING_BOUNDS = {
+  x: 60,
+  y: 60,
+  width: 2280,
+  height: 880
+};
+
+export const CORRIDOR_AREAS: FloorArea[] = [
+  { id: 'MAIN_CORRIDOR', x: 60, y: 560, width: 2280, height: 90 }
+];
 
 export const SPAWN_POINTS: Vector2D[] = [
-  { x: 1060, y: 610 }, { x: 1140, y: 610 },
-  { x: 1060, y: 690 }, { x: 1140, y: 690 },
-  { x: 1020, y: 650 }, { x: 1180, y: 650 },
-  { x: 1100, y: 590 }, { x: 1100, y: 710 },
-  { x: 1040, y: 670 }, { x: 1160, y: 670 }
+  { x: 1130, y: 595 }, { x: 1210, y: 595 },
+  { x: 1290, y: 595 }, { x: 1370, y: 595 },
+  { x: 1090, y: 625 }, { x: 1170, y: 625 },
+  { x: 1250, y: 625 }, { x: 1330, y: 625 },
+  { x: 1410, y: 625 }, { x: 1490, y: 625 }
 ];
 
 export const ROOMS: RoomRect[] = [
-  // Central hub
-  { id: 'CAFETERIA',    name: 'Refeitório',      x: 900,  y: 500, width: 400, height: 300, color: '#1a2744' },
-  // Right wing
-  { id: 'NAVIGATION',   name: 'Navegação',       x: 1600, y: 550, width: 300, height: 250, color: '#142238' },
-  // Admin below Storage
-  { id: 'ADMIN',        name: 'Administração',   x: 1350, y: 1100, width: 280, height: 220, color: '#1c2a3a' },
-  // Left wing top
-  { id: 'UPPER_ENGINE', name: 'Motor Superior',   x: 150,  y: 150, width: 260, height: 220, color: '#2d1a4e' },
-  { id: 'MEDBAY',       name: 'Enfermaria',       x: 520,  y: 180, width: 280, height: 220, color: '#0c3a2a' },
-  { id: 'WEAPONS',      name: 'Armamento',        x: 700,  y: 50,  width: 260, height: 200, color: '#3a1a1a' },
-  // Left wing middle
-  { id: 'REACTOR',      name: 'Reator',           x: 80,   y: 480, width: 280, height: 260, color: '#1e1854' },
-  { id: 'SECURITY',     name: 'Segurança',        x: 460,  y: 530, width: 260, height: 240, color: '#2a1248' },
-  // Bottom
-  { id: 'ELECTRICAL',   name: 'Elétrica',         x: 480,  y: 950, width: 300, height: 270, color: '#1a1842' },
-  { id: 'STORAGE',      name: 'Armazém',          x: 1000, y: 980, width: 340, height: 280, color: '#1e3612' },
-  { id: 'LOWER_ENGINE', name: 'Motor Inferior',   x: 120,  y: 960, width: 260, height: 220, color: '#2d1a4e' },
+  { id: 'FUMODROMO',       name: 'Fumódromo',       x: 60,   y: 60,  width: 290, height: 500, color: '#26384a' },
+  { id: 'CONSULTORIA',      name: 'Consultoria',      x: 350,  y: 60,  width: 470, height: 240, color: '#20394b' },
+  { id: 'SALA_LAZER',       name: 'Sala de Lazer',    x: 350,  y: 300, width: 470, height: 260, color: '#29354c' },
+  { id: 'BANHEIRO_NORTE',   name: 'Banheiro',         x: 820,  y: 60,  width: 160, height: 220, color: '#244354' },
+  { id: 'ACESSO_NORTE',     name: 'Acesso',           x: 820,  y: 280, width: 160, height: 280, color: '#172d40' },
+  { id: 'AREA_VERDE',       name: 'Área Verde',       x: 980,  y: 60,  width: 440, height: 220, color: '#174237' },
+  { id: 'ATRIO',            name: 'Átrio',            x: 980,  y: 280, width: 440, height: 280, color: '#203f43' },
+  { id: 'DESENVOLVIMENTO',  name: 'Desenvolvimento',  x: 1420, y: 60,  width: 400, height: 500, color: '#222d4a' },
+  { id: 'COMERCIAL',        name: 'Comercial',        x: 1820, y: 60,  width: 360, height: 500, color: '#2d3148' },
+  { id: 'BANHEIRO_LESTE',   name: 'Banheiro',         x: 2180, y: 60,  width: 160, height: 200, color: '#244354' },
+  { id: 'ACESSO_LESTE',     name: 'Acesso Leste',     x: 2180, y: 260, width: 160, height: 300, color: '#172d40' },
+  { id: 'COZINHA',          name: 'Cozinha',          x: 60,   y: 650, width: 620, height: 290, color: '#3c3328' },
+  { id: 'BANHEIRO_M',       name: 'Banheiro M',       x: 680,  y: 650, width: 190, height: 145, color: '#244354' },
+  { id: 'BANHEIRO_F',       name: 'Banheiro F',       x: 680,  y: 795, width: 190, height: 145, color: '#2c3f55' },
+  { id: 'SALA_DIGUINHO',    name: 'Sala Diguinho',    x: 980,  y: 650, width: 280, height: 290, color: '#2d2d4d' },
+  { id: 'SUPRIMENTOS',      name: 'Suprimentos',      x: 1260, y: 650, width: 320, height: 170, color: '#39402d' },
+  { id: 'SERVER',           name: 'Server',           x: 1260, y: 820, width: 320, height: 120, color: '#321e3f' },
+  { id: 'SALA_TONHO',       name: 'Sala Tonho',       x: 1580, y: 650, width: 300, height: 290, color: '#28394b' },
+  { id: 'GARAGEM',          name: 'Garagem',          x: 1880, y: 650, width: 460, height: 290, color: '#30383b' }
 ];
 
-// DOOR = 80px gap in wall
-const D = 80;
+function horizontalWall(y: number, start: number, end: number, gaps: Array<[number, number]> = []): WallSegment[] {
+  const segments: WallSegment[] = [];
+  let cursor = start;
+  for (const [gapStart, gapEnd] of [...gaps].sort((a, b) => a[0] - b[0])) {
+    if (gapStart > cursor) segments.push({ x1: cursor, y1: y, x2: gapStart, y2: y });
+    cursor = Math.max(cursor, gapEnd);
+  }
+  if (cursor < end) segments.push({ x1: cursor, y1: y, x2: end, y2: y });
+  return segments;
+}
+
+function verticalWall(x: number, start: number, end: number, gaps: Array<[number, number]> = []): WallSegment[] {
+  const segments: WallSegment[] = [];
+  let cursor = start;
+  for (const [gapStart, gapEnd] of [...gaps].sort((a, b) => a[0] - b[0])) {
+    if (gapStart > cursor) segments.push({ x1: x, y1: cursor, x2: x, y2: gapStart });
+    cursor = Math.max(cursor, gapEnd);
+  }
+  if (cursor < end) segments.push({ x1: x, y1: cursor, x2: x, y2: end });
+  return segments;
+}
 
 export const MAP_WALLS: WallSegment[] = [
-  // === CAFETERIA (900,500 -> 1300,800) ===
-  // Top wall: gap for corridor to Weapons area (1040-1120)
-  { x1: 900, y1: 500, x2: 1040, y2: 500 },
-  { x1: 1120, y1: 500, x2: 1300, y2: 500 },
-  // Right wall: gap 610-690 for corridor to Navigation
-  { x1: 1300, y1: 500, x2: 1300, y2: 610 },
-  { x1: 1300, y1: 690, x2: 1300, y2: 800 },
-  // Bottom wall: gap 1040-1120 for corridor to Storage
-  { x1: 900, y1: 800, x2: 1040, y2: 800 },
-  { x1: 1120, y1: 800, x2: 1300, y2: 800 },
-  // Left wall: gap 610-690 for corridor to Security
-  { x1: 900, y1: 500, x2: 900, y2: 610 },
-  { x1: 900, y1: 690, x2: 900, y2: 800 },
+  // Contorno externo do prédio.
+  ...horizontalWall(60, 60, 2340),
+  ...verticalWall(2340, 60, 940),
+  ...horizontalWall(940, 60, 2340),
+  ...verticalWall(60, 60, 940),
 
-  // === CORRIDOR: Cafeteria -> Navigation (1300,610 to 1600,690) ===
-  { x1: 1300, y1: 610, x2: 1600, y2: 610 },
-  { x1: 1300, y1: 690, x2: 1600, y2: 690 },
+  // Fachada norte do corredor, com as portas da planta.
+  ...horizontalWall(560, 60, 2340, [
+    [260, 330],   // Fumódromo
+    [470, 550],   // Consultoria
+    [650, 730],   // Sala de Lazer
+    [865, 935],   // acesso ao banheiro norte
+    [1010, 1090], // átrio / área verde
+    [1710, 1790], // Desenvolvimento
+    [1990, 2070], // Comercial
+    [2215, 2295]  // acesso ao banheiro leste
+  ]),
 
-  // === NAVIGATION (1600,550 -> 1900,800) ===
-  { x1: 1600, y1: 550, x2: 1900, y2: 550 },
-  { x1: 1900, y1: 550, x2: 1900, y2: 800 },
-  { x1: 1900, y1: 800, x2: 1600, y2: 800 },
-  { x1: 1600, y1: 550, x2: 1600, y2: 610 },
-  { x1: 1600, y1: 690, x2: 1600, y2: 800 },
+  // Fachada sul do corredor.
+  ...horizontalWall(650, 60, 2340, [
+    [245, 325],   // Cozinha
+    [1110, 1190], // Sala Diguinho
+    [1360, 1440], // Suprimentos
+    [1640, 1720], // Sala Tonho
+    [2050, 2190]  // Garagem
+  ]),
 
-  // === CORRIDOR: Cafeteria -> Security (720,610 to 900,690) ===
-  { x1: 720, y1: 610, x2: 900, y2: 610 },
-  { x1: 720, y1: 690, x2: 900, y2: 690 },
+  // Divisões da ala norte.
+  ...verticalWall(350, 60, 560),
+  ...verticalWall(820, 60, 560),
+  ...verticalWall(980, 60, 560),
+  ...verticalWall(1420, 60, 560),
+  ...verticalWall(1820, 60, 560),
+  ...verticalWall(2180, 60, 560),
+  ...horizontalWall(300, 350, 820, [[500, 580]]),
+  ...horizontalWall(280, 820, 980, [[865, 935]]),
+  ...horizontalWall(280, 980, 1420, [[1160, 1240]]),
+  ...horizontalWall(260, 2180, 2340, [[2215, 2295]]),
 
-  // === SECURITY (460,530 -> 720,770) ===
-  { x1: 460, y1: 530, x2: 720, y2: 530 },
-  { x1: 720, y1: 530, x2: 720, y2: 610 },
-  { x1: 720, y1: 690, x2: 720, y2: 770 },
-  // Bottom: gap 550-630 for corridor to Electrical
-  { x1: 460, y1: 770, x2: 550, y2: 770 },
-  { x1: 630, y1: 770, x2: 720, y2: 770 },
-  // Left: gap 610-690 for corridor to Reactor
-  { x1: 460, y1: 530, x2: 460, y2: 610 },
-  { x1: 460, y1: 690, x2: 460, y2: 770 },
-
-  // === CORRIDOR: Security -> Reactor (360,610 to 460,690) ===
-  { x1: 360, y1: 610, x2: 460, y2: 610 },
-  { x1: 360, y1: 690, x2: 460, y2: 690 },
-
-  // === REACTOR (80,480 -> 360,740) ===
-  // Top: gap 200-280 for corridor to Upper Engine
-  { x1: 80, y1: 480, x2: 200, y2: 480 },
-  { x1: 280, y1: 480, x2: 360, y2: 480 },
-  { x1: 360, y1: 480, x2: 360, y2: 610 },
-  { x1: 360, y1: 690, x2: 360, y2: 740 },
-  { x1: 360, y1: 740, x2: 80, y2: 740 },
-  { x1: 80, y1: 740, x2: 80, y2: 480 },
-
-  // === CORRIDOR: Reactor -> Upper Engine (200,370 to 280,480) ===
-  { x1: 200, y1: 370, x2: 200, y2: 480 },
-  { x1: 280, y1: 370, x2: 280, y2: 480 },
-
-  // === UPPER ENGINE (150,150 -> 410,370) ===
-  { x1: 150, y1: 150, x2: 410, y2: 150 },
-  // Right: gap 270-350 for corridor to MedBay
-  { x1: 410, y1: 150, x2: 410, y2: 270 },
-  { x1: 410, y1: 350, x2: 410, y2: 370 },
-  // Bottom: gap 200-280 for corridor to Reactor
-  { x1: 150, y1: 370, x2: 200, y2: 370 },
-  { x1: 280, y1: 370, x2: 410, y2: 370 },
-  { x1: 150, y1: 370, x2: 150, y2: 150 },
-
-  // === CORRIDOR: Upper Engine -> MedBay (410,270 to 520,350) ===
-  { x1: 410, y1: 270, x2: 520, y2: 270 },
-  { x1: 410, y1: 350, x2: 520, y2: 350 },
-
-  // === MEDBAY (520,180 -> 800,400) ===
-  { x1: 520, y1: 180, x2: 800, y2: 180 },
-  // Right: gap 280-360 for corridor to Weapons
-  { x1: 800, y1: 180, x2: 800, y2: 400 },
-  // Bottom: connect to corridor area
-  { x1: 800, y1: 400, x2: 520, y2: 400 },
-  { x1: 520, y1: 180, x2: 520, y2: 270 },
-  { x1: 520, y1: 350, x2: 520, y2: 400 },
-
-  // === WEAPONS (700,50 -> 960,250) ===
-  // Connected to MedBay via open area (700-800, 180-250)
-  { x1: 700, y1: 50, x2: 960, y2: 50 },
-  { x1: 960, y1: 50, x2: 960, y2: 250 },
-  { x1: 960, y1: 250, x2: 800, y2: 250 },
-  // Gap 700-800 connects to MedBay top
-  { x1: 700, y1: 250, x2: 700, y2: 180 },
-  { x1: 700, y1: 180, x2: 700, y2: 50 },
-
-  // === CORRIDOR: Security -> Electrical (550,770 to 630,950) ===
-  { x1: 550, y1: 770, x2: 550, y2: 950 },
-  { x1: 630, y1: 770, x2: 630, y2: 950 },
-
-  // === ELECTRICAL (480,950 -> 780,1220) ===
-  { x1: 480, y1: 950, x2: 550, y2: 950 },
-  { x1: 630, y1: 950, x2: 780, y2: 950 },
-  // Right: gap 1060-1140 for corridor to Storage
-  { x1: 780, y1: 950, x2: 780, y2: 1060 },
-  { x1: 780, y1: 1140, x2: 780, y2: 1220 },
-  { x1: 780, y1: 1220, x2: 480, y2: 1220 },
-  // Left: gap 1060-1140 for corridor to Lower Engine
-  { x1: 480, y1: 1220, x2: 480, y2: 1140 },
-  { x1: 480, y1: 1060, x2: 480, y2: 950 },
-
-  // === CORRIDOR: Electrical -> Storage (780,1060 to 1000,1140) ===
-  { x1: 780, y1: 1060, x2: 1000, y2: 1060 },
-  { x1: 780, y1: 1140, x2: 1000, y2: 1140 },
-
-  // === STORAGE (1000,980 -> 1340,1260) ===
-  // Top: gap 1040-1120 for corridor from Cafeteria
-  { x1: 1000, y1: 980, x2: 1340, y2: 980 },
-  { x1: 1340, y1: 980, x2: 1340, y2: 1100 },
-  // Right: gap 1100-1180 for corridor to Admin
-  { x1: 1340, y1: 1180, x2: 1340, y2: 1260 },
-  { x1: 1340, y1: 1260, x2: 1000, y2: 1260 },
-  // Left: gap 1060-1140 for corridor from Electrical
-  { x1: 1000, y1: 980, x2: 1000, y2: 1060 },
-  { x1: 1000, y1: 1140, x2: 1000, y2: 1260 },
-
-  // === CORRIDOR: Cafeteria bottom -> Storage top (1040,800 to 1120,980) ===
-  { x1: 1040, y1: 800, x2: 1040, y2: 980 },
-  { x1: 1120, y1: 800, x2: 1120, y2: 980 },
-
-  // === CORRIDOR: Storage -> Admin (1340,1100 to 1350,1180) ===
-  // Admin touches Storage right side so just a small gap
-  // Actually Admin is at 1350,1100 so it's right next to Storage
-
-  // === ADMIN (1350,1100 -> 1630,1320) ===
-  { x1: 1350, y1: 1100, x2: 1630, y2: 1100 },
-  { x1: 1630, y1: 1100, x2: 1630, y2: 1320 },
-  { x1: 1630, y1: 1320, x2: 1350, y2: 1320 },
-  // Left: gap 1100-1180 (connects to Storage right gap)
-  { x1: 1350, y1: 1100, x2: 1350, y2: 1100 },  // tiny
-  { x1: 1350, y1: 1180, x2: 1350, y2: 1320 },
-
-  // === CORRIDOR: Electrical -> Lower Engine (380,1060 to 480,1140) ===
-  { x1: 380, y1: 1060, x2: 480, y2: 1060 },
-  { x1: 380, y1: 1140, x2: 480, y2: 1140 },
-
-  // === LOWER ENGINE (120,960 -> 380,1180) ===
-  { x1: 120, y1: 960, x2: 380, y2: 960 },
-  { x1: 380, y1: 960, x2: 380, y2: 1060 },
-  { x1: 380, y1: 1140, x2: 380, y2: 1180 },
-  { x1: 380, y1: 1180, x2: 120, y2: 1180 },
-  { x1: 120, y1: 1180, x2: 120, y2: 960 },
+  // Divisões da ala sul e o vazio estrutural entre banheiros e Sala Diguinho.
+  ...verticalWall(680, 650, 940, [[700, 760], [835, 895]]),
+  ...verticalWall(870, 650, 940),
+  ...verticalWall(980, 650, 940),
+  ...verticalWall(1260, 650, 940),
+  ...verticalWall(1580, 650, 940),
+  ...verticalWall(1880, 650, 940),
+  ...horizontalWall(795, 680, 870),
+  ...horizontalWall(820, 1260, 1580, [[1480, 1560]])
 ];
 
-// All tasks placed well inside their rooms
+// Móveis grandes da planta também têm colisão. Objetos pequenos permanecem
+// apenas decorativos para não transformar os ambientes em labirintos.
+export const MAP_OBSTACLES: ObstacleRect[] = [
+  { id: 'fumo_sofa', kind: 'SOFA', x: 88, y: 120, width: 55, height: 180 },
+  { id: 'consult_table', kind: 'TABLE', x: 500, y: 90, width: 180, height: 65 },
+  { id: 'lazer_sofa', kind: 'SOFA', x: 540, y: 485, width: 120, height: 48 },
+  { id: 'green_planter_w', kind: 'PLANTER', x: 1015, y: 90, width: 80, height: 120 },
+  { id: 'green_planter_e', kind: 'PLANTER', x: 1300, y: 90, width: 80, height: 120 },
+  { id: 'atrio_planter', kind: 'PLANTER', x: 1100, y: 470, width: 180, height: 55 },
+  { id: 'dev_desk_n', kind: 'DESK', x: 1490, y: 125, width: 250, height: 48 },
+  { id: 'dev_desk_s', kind: 'DESK', x: 1510, y: 360, width: 220, height: 48 },
+  { id: 'commercial_desk', kind: 'DESK', x: 1920, y: 180, width: 140, height: 70 },
+  { id: 'kitchen_table', kind: 'TABLE', x: 290, y: 835, width: 230, height: 90 },
+  { id: 'diguinho_table', kind: 'TABLE', x: 1060, y: 830, width: 140, height: 70 },
+  { id: 'supply_shelves', kind: 'SHELF', x: 1280, y: 760, width: 160, height: 35 },
+  { id: 'server_rack', kind: 'SERVER_RACK', x: 1270, y: 840, width: 80, height: 70 },
+  { id: 'tonho_table', kind: 'TABLE', x: 1660, y: 840, width: 150, height: 75 },
+  { id: 'garage_car_w', kind: 'CAR', x: 1970, y: 720, width: 110, height: 180 },
+  { id: 'garage_car_e', kind: 'CAR', x: 2160, y: 720, width: 110, height: 180 }
+];
+
 export const TASK_DEFINITIONS: TaskDefinition[] = [
-  // Electrical (480-780, 950-1220)
-  { id: 'task_elec_wiring',     roomId: 'ELECTRICAL', roomName: 'Elétrica',        type: 'WIRING',     x: 540, y: 1010, length: 'SHORT' },
-  { id: 'task_elec_switches',   roomId: 'ELECTRICAL', roomName: 'Elétrica',        type: 'SWITCHES',   x: 720, y: 1060, length: 'SHORT' },
-  { id: 'task_elec_calibrate',  roomId: 'ELECTRICAL', roomName: 'Elétrica',        type: 'CALIBRATE',  x: 630, y: 1170, length: 'LONG' },
-
-  // Navigation (1600-1900, 550-800)
-  { id: 'task_nav_wiring',    roomId: 'NAVIGATION', roomName: 'Navegação',       type: 'WIRING',   x: 1830, y: 620, length: 'SHORT' },
-  { id: 'task_nav_download',  roomId: 'NAVIGATION', roomName: 'Navegação',       type: 'DOWNLOAD', x: 1680, y: 740, length: 'LONG' },
-  { id: 'task_nav_keypad',    roomId: 'NAVIGATION', roomName: 'Navegação',       type: 'KEYPAD',   x: 1800, y: 740, length: 'SHORT' },
-
-  // Cafeteria (900-1300, 500-800)
-  { id: 'task_caf_keypad',  roomId: 'CAFETERIA', roomName: 'Refeitório',       type: 'KEYPAD', x: 1240, y: 560, length: 'SHORT' },
-  { id: 'task_caf_wiring',  roomId: 'CAFETERIA', roomName: 'Refeitório',       type: 'WIRING', x: 960,  y: 750, length: 'SHORT' },
-
-  // Reactor (80-360, 480-740)
-  { id: 'task_react_simon',     roomId: 'REACTOR', roomName: 'Reator',          type: 'SIMON',     x: 160, y: 560, length: 'LONG' },
-  { id: 'task_react_calibrate', roomId: 'REACTOR', roomName: 'Reator',          type: 'CALIBRATE', x: 300, y: 680, length: 'SHORT' },
-
-  // Storage (1000-1340, 980-1260)
-  { id: 'task_stor_refill',  roomId: 'STORAGE', roomName: 'Armazém',          type: 'REFILL', x: 1100, y: 1200, length: 'LONG' },
-  { id: 'task_stor_wiring',  roomId: 'STORAGE', roomName: 'Armazém',          type: 'WIRING', x: 1280, y: 1040, length: 'SHORT' },
-
-  // MedBay (520-800, 180-400)
-  { id: 'task_med_download', roomId: 'MEDBAY', roomName: 'Enfermaria',       type: 'DOWNLOAD', x: 660, y: 260, length: 'SHORT' },
-  { id: 'task_med_scan',     roomId: 'MEDBAY', roomName: 'Enfermaria',       type: 'CALIBRATE', x: 600, y: 360, length: 'LONG' },
-
-  // Security (460-720, 530-770)
-  { id: 'task_sec_switches', roomId: 'SECURITY', roomName: 'Segurança',       type: 'SWITCHES', x: 560, y: 600, length: 'SHORT' },
-
-  // Upper Engine (150-410, 150-370)
-  { id: 'task_upeng_fuel',   roomId: 'UPPER_ENGINE', roomName: 'Motor Superior', type: 'REFILL',   x: 280, y: 250, length: 'LONG' },
-
-  // Lower Engine (120-380, 960-1180)
-  { id: 'task_loweng_fuel',  roomId: 'LOWER_ENGINE', roomName: 'Motor Inferior', type: 'REFILL',   x: 250, y: 1060, length: 'LONG' },
-
-  // Weapons (700-960, 50-250)
-  { id: 'task_weap_target',  roomId: 'WEAPONS', roomName: 'Armamento',        type: 'SIMON',   x: 830, y: 140, length: 'SHORT' },
-
-  // Admin (1350-1630, 1100-1320)
-  { id: 'task_admin_card',   roomId: 'ADMIN', roomName: 'Administração',     type: 'KEYPAD',   x: 1490, y: 1200, length: 'SHORT' },
-  { id: 'task_admin_upload', roomId: 'ADMIN', roomName: 'Administração',     type: 'DOWNLOAD', x: 1560, y: 1150, length: 'LONG' },
+  { id: 'task_fumo_filter',       roomId: 'FUMODROMO',      roomName: 'Fumódromo',      type: 'SWITCHES',  x: 270,  y: 160, length: 'SHORT' },
+  { id: 'task_consult_download',  roomId: 'CONSULTORIA',     roomName: 'Consultoria',     type: 'DOWNLOAD',  x: 740,  y: 150, length: 'LONG' },
+  { id: 'task_lazer_console',     roomId: 'SALA_LAZER',      roomName: 'Sala de Lazer',   type: 'KEYPAD',    x: 420,  y: 450, length: 'SHORT' },
+  { id: 'task_bath_sensor',       roomId: 'BANHEIRO_NORTE',  roomName: 'Banheiro',        type: 'CALIBRATE', x: 900,  y: 140, length: 'SHORT' },
+  { id: 'task_green_irrigation',  roomId: 'AREA_VERDE',      roomName: 'Área Verde',      type: 'REFILL',    x: 1200, y: 180, length: 'LONG' },
+  { id: 'task_atrio_lights',      roomId: 'ATRIO',           roomName: 'Átrio',           type: 'SWITCHES',  x: 1330, y: 420, length: 'SHORT' },
+  { id: 'task_dev_wiring',        roomId: 'DESENVOLVIMENTO', roomName: 'Desenvolvimento', type: 'WIRING',    x: 1760, y: 180, length: 'SHORT' },
+  { id: 'task_dev_compile',       roomId: 'DESENVOLVIMENTO', roomName: 'Desenvolvimento', type: 'SIMON',     x: 1740, y: 470, length: 'LONG' },
+  { id: 'task_commercial_upload', roomId: 'COMERCIAL',       roomName: 'Comercial',       type: 'DOWNLOAD',  x: 2110, y: 160, length: 'LONG' },
+  { id: 'task_commercial_keypad', roomId: 'COMERCIAL',       roomName: 'Comercial',       type: 'KEYPAD',    x: 2100, y: 430, length: 'SHORT' },
+  { id: 'task_kitchen_refill',    roomId: 'COZINHA',         roomName: 'Cozinha',         type: 'REFILL',    x: 140,  y: 850, length: 'LONG' },
+  { id: 'task_kitchen_switches',  roomId: 'COZINHA',         roomName: 'Cozinha',         type: 'SWITCHES',  x: 590,  y: 730, length: 'SHORT' },
+  { id: 'task_bath_wiring',       roomId: 'BANHEIRO_F',      roomName: 'Banheiro F',      type: 'WIRING',    x: 780,  y: 860, length: 'SHORT' },
+  { id: 'task_diguinho_keypad',   roomId: 'SALA_DIGUINHO',   roomName: 'Sala Diguinho',   type: 'KEYPAD',    x: 1020, y: 700, length: 'SHORT' },
+  { id: 'task_supply_inventory',  roomId: 'SUPRIMENTOS',     roomName: 'Suprimentos',     type: 'CALIBRATE', x: 1350, y: 710, length: 'LONG' },
+  { id: 'task_server_wiring',     roomId: 'SERVER',          roomName: 'Server',          type: 'WIRING',    x: 1525, y: 850, length: 'SHORT' },
+  { id: 'task_server_restart',    roomId: 'SERVER',          roomName: 'Server',          type: 'SIMON',     x: 1525, y: 910, length: 'LONG' },
+  { id: 'task_tonho_download',    roomId: 'SALA_TONHO',      roomName: 'Sala Tonho',      type: 'DOWNLOAD',  x: 1850, y: 875, length: 'LONG' },
+  { id: 'task_garage_calibrate',  roomId: 'GARAGEM',         roomName: 'Garagem',         type: 'CALIBRATE', x: 1920, y: 700, length: 'SHORT' },
+  { id: 'task_garage_wiring',     roomId: 'GARAGEM',         roomName: 'Garagem',         type: 'WIRING',    x: 2310, y: 700, length: 'SHORT' }
 ];
 
 export const VENTS: Vent[] = [
-  { id: 'vent_elec',  roomId: 'ELECTRICAL',   x: 600, y: 1180,  connectsTo: ['vent_sec', 'vent_med'] },
-  { id: 'vent_sec',   roomId: 'SECURITY',     x: 540, y: 720,   connectsTo: ['vent_elec', 'vent_med'] },
-  { id: 'vent_med',   roomId: 'MEDBAY',       x: 750, y: 360,   connectsTo: ['vent_elec', 'vent_sec'] },
-  { id: 'vent_react', roomId: 'REACTOR',      x: 140, y: 700,   connectsTo: ['vent_upeng'] },
-  { id: 'vent_upeng', roomId: 'UPPER_ENGINE', x: 300, y: 320,   connectsTo: ['vent_react'] },
-  { id: 'vent_nav',   roomId: 'NAVIGATION',   x: 1850, y: 760,  connectsTo: ['vent_caf', 'vent_admin'] },
-  { id: 'vent_caf',   roomId: 'CAFETERIA',    x: 1250, y: 760,  connectsTo: ['vent_nav'] },
-  { id: 'vent_admin', roomId: 'ADMIN',        x: 1580, y: 1280, connectsTo: ['vent_nav', 'vent_stor'] },
-  { id: 'vent_stor',  roomId: 'STORAGE',      x: 1280, y: 1220, connectsTo: ['vent_admin'] },
+  { id: 'vent_fumo',   roomId: 'FUMODROMO',      x: 120,  y: 500, connectsTo: ['vent_server', 'vent_dev'] },
+  { id: 'vent_dev',    roomId: 'DESENVOLVIMENTO', x: 1490, y: 500, connectsTo: ['vent_fumo', 'vent_garage'] },
+  { id: 'vent_server', roomId: 'SERVER',          x: 1380, y: 900, connectsTo: ['vent_fumo', 'vent_garage'] },
+  { id: 'vent_garage', roomId: 'GARAGEM',         x: 2310, y: 880, connectsTo: ['vent_dev', 'vent_server'] },
+  { id: 'vent_green',  roomId: 'AREA_VERDE',      x: 1245, y: 120, connectsTo: ['vent_kitchen'] },
+  { id: 'vent_kitchen', roomId: 'COZINHA',        x: 590,  y: 880, connectsTo: ['vent_green'] }
 ];
 
 export const SABOTAGE_NODES = {
-  LIGHTS_BREAKER: { x: 700, y: 1100, roomId: 'ELECTRICAL', roomName: 'Elétrica' },
-  REACTOR_PAD_1:  { x: 160, y: 520,  roomId: 'REACTOR',    roomName: 'Reator Pad 1' },
-  REACTOR_PAD_2:  { x: 310, y: 520,  roomId: 'REACTOR',    roomName: 'Reator Pad 2' },
-  O2_KEYPAD_1:    { x: 1200, y: 560, roomId: 'CAFETERIA',  roomName: 'Refeitório O2' },
-  O2_KEYPAD_2:    { x: 1750, y: 600, roomId: 'NAVIGATION', roomName: 'Navegação O2' },
-  COMMS_CONSOLE:  { x: 700, y: 1350, roomId: 'COMMUNICATIONS', roomName: 'Comunicações' }
+  LIGHTS_BREAKER: { x: 1525, y: 850, roomId: 'SERVER', roomName: 'Server' },
+  REACTOR_PAD_1:  { x: 1490, y: 170, roomId: 'DESENVOLVIMENTO', roomName: 'Desenvolvimento 1' },
+  REACTOR_PAD_2:  { x: 1740, y: 470, roomId: 'DESENVOLVIMENTO', roomName: 'Desenvolvimento 2' },
+  O2_KEYPAD_1:    { x: 1200, y: 180, roomId: 'AREA_VERDE', roomName: 'Área Verde' },
+  O2_KEYPAD_2:    { x: 2310, y: 700, roomId: 'GARAGEM', roomName: 'Garagem' },
+  COMMS_CONSOLE:  { x: 2110, y: 160, roomId: 'COMERCIAL', roomName: 'Comercial' }
 };

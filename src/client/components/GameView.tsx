@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { PlayerPrivateData, PlayerPublicData, DeadBody, SabotageState, MeetingState, ChatMessage } from '../../shared/types';
+import { PlayerPrivateData, PlayerPublicData, DeadBody, SabotageState, MeetingState, ChatMessage, PlayerTask } from '../../shared/types';
 import { Renderer } from '../game/Renderer';
 import { InputHandler } from '../game/InputHandler';
 import { HUD } from './HUD';
@@ -7,7 +7,8 @@ import { Minimap } from './Minimap';
 import { MeetingOverlay } from './MeetingOverlay';
 import { TaskOverlay } from './TaskOverlay';
 import { SabotageOverlay } from './SabotageOverlay';
-import { EMERGENCY_BUTTON_POS, SABOTAGE_NODES, TASK_DEFINITIONS, MAP_BOUNDS } from '../../shared/mapData';
+import { SABOTAGE_NODES } from '../../shared/mapData';
+import { clampPosition, hasLineOfSight } from '../../shared/mapCollision';
 import { socket } from '../socket';
 import { SOCKET_EVENTS } from '../../shared/protocol';
 
@@ -39,10 +40,11 @@ export const GameView: React.FC<Props> = ({
   // Smooth 60 FPS client prediction position
   const localPosRef = useRef<{ x: number; y: number }>({ x: self.x, y: self.y });
 
-  const [activeTask, setActiveTask] = useState<any | null>(null);
+  const [activeTask, setActiveTask] = useState<PlayerTask | null>(null);
   const [activeSabotageFix, setActiveSabotageFix] = useState<boolean>(false);
   const [showMinimap, setShowMinimap] = useState<boolean>(false);
   const [nearbyInteractable, setNearbyInteractable] = useState<string | null>(null);
+  const [nearbyBodyId, setNearbyBodyId] = useState<string | null>(null);
 
   // Reconcile server position if server lags behind
   useEffect(() => {
@@ -97,12 +99,10 @@ export const GameView: React.FC<Props> = ({
           const facing = state.moveX < 0 ? 'LEFT' : 'RIGHT';
 
           // Move local position smoothly at 60 FPS
-          localPosRef.current.x += vx * dt;
-          localPosRef.current.y += vy * dt;
-
-          // Clamp within map bounds
-          localPosRef.current.x = Math.max(30, Math.min(MAP_BOUNDS.width - 30, localPosRef.current.x));
-          localPosRef.current.y = Math.max(30, Math.min(MAP_BOUNDS.height - 30, localPosRef.current.y));
+          localPosRef.current = clampPosition(localPosRef.current, {
+            x: localPosRef.current.x + vx * dt,
+            y: localPosRef.current.y + vy * dt
+          });
 
           // Throttle socket C2S_MOVE updates to 30Hz
           if (moveThrottleTimer >= 0.033) {
@@ -123,17 +123,12 @@ export const GameView: React.FC<Props> = ({
 
         let detectedInteractable: string | null = null;
 
-        // Check Emergency Button
-        if (Math.sqrt(Math.pow(posX - EMERGENCY_BUTTON_POS.x, 2) + Math.pow(posY - EMERGENCY_BUTTON_POS.y, 2)) < 120) {
-          detectedInteractable = 'EMERGENCY_BUTTON';
-        }
-
         // Check Crewmate Tasks
-        if (!detectedInteractable && self.role === 'CREWMATE') {
+        if (self.role === 'CREWMATE') {
           for (const t of self.tasks) {
             if (!t.completed) {
               const d = Math.sqrt(Math.pow(posX - t.x, 2) + Math.pow(posY - t.y, 2));
-              if (d < 120) {
+              if (d < 120 && hasLineOfSight({ x: posX, y: posY }, t)) {
                 detectedInteractable = t.id;
                 break;
               }
@@ -149,7 +144,26 @@ export const GameView: React.FC<Props> = ({
           }
         }
 
-        setNearbyInteractable(detectedInteractable);
+        if (detectedInteractable !== nearbyInteractable) {
+          setNearbyInteractable(detectedInteractable);
+        }
+
+        const closestBody = bodies
+          .filter(body => !body.reported)
+          .map(body => ({
+            id: body.id,
+            distance: Math.hypot(posX - body.x, posY - body.y)
+          }))
+          .filter(body => {
+            const sourceBody = bodies.find(candidate => candidate.id === body.id)!;
+            return body.distance <= 150 &&
+              hasLineOfSight({ x: posX, y: posY }, sourceBody);
+          })
+          .sort((a, b) => a.distance - b.distance)[0];
+        const detectedBodyId = closestBody?.id ?? null;
+        if (detectedBodyId !== nearbyBodyId) {
+          setNearbyBodyId(detectedBodyId);
+        }
 
         // Auto trigger interaction if 'E' or Space pressed
         if (state.isInteracting && detectedInteractable) {
@@ -168,12 +182,10 @@ export const GameView: React.FC<Props> = ({
 
     animFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [self, players, bodies, sabotage, meeting, activeTask, activeSabotageFix, nearbyInteractable]);
+  }, [self, players, bodies, sabotage, meeting, activeTask, activeSabotageFix, nearbyInteractable, nearbyBodyId]);
 
   const triggerInteract = (targetId: string) => {
-    if (targetId === 'EMERGENCY_BUTTON') {
-      socket.emit(SOCKET_EVENTS.C2S_CALL_MEETING);
-    } else if (targetId === 'LIGHTS_BREAKER') {
+    if (targetId === 'LIGHTS_BREAKER') {
       setActiveSabotageFix(true);
     } else {
       const task = self.tasks.find(t => t.id === targetId);
@@ -201,12 +213,8 @@ export const GameView: React.FC<Props> = ({
   };
 
   const handleReport = () => {
-    const posX = localPosRef.current.x;
-    const posY = localPosRef.current.y;
-
-    const closestBody = bodies.find(b => Math.sqrt(Math.pow(posX - b.x, 2) + Math.pow(posY - b.y, 2)) < 150);
-    if (closestBody) {
-      socket.emit(SOCKET_EVENTS.C2S_REPORT_BODY, { bodyId: closestBody.id });
+    if (nearbyBodyId) {
+      socket.emit(SOCKET_EVENTS.C2S_REPORT_BODY, { bodyId: nearbyBodyId });
     }
   };
 
@@ -227,6 +235,7 @@ export const GameView: React.FC<Props> = ({
           totalTasks={totalTaskCount}
           sabotage={sabotage}
           nearbyInteractable={nearbyInteractable}
+          canReport={nearbyBodyId !== null}
           onJoystickMove={(dir) => {
             if (inputHandlerRef.current) {
               inputHandlerRef.current.joystickDir = dir;

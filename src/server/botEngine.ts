@@ -1,7 +1,13 @@
-import { Vector2D, PlayerRole, PlayerState, TaskDefinition } from '../shared/types';
-import { TASK_DEFINITIONS, ROOMS, VENTS, EMERGENCY_BUTTON_POS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
+import { Vector2D } from '../shared/types';
+import { ROOMS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
+import { clampPosition } from '../shared/mapCollision';
 import { GameEngine, GamePlayer } from './gameEngine';
-import { sanitizeChatMessage } from './chatFilter';
+import {
+  BotActionDecision,
+  BotAIProvider,
+  BotWorldAction,
+  GeminiBotAI
+} from './geminiBotAI';
 
 export interface WaypointNode {
   id: string;
@@ -11,441 +17,566 @@ export interface WaypointNode {
 }
 
 export const WAYPOINTS: Record<string, WaypointNode> = {
-  CAFETERIA:    { id: 'CAFETERIA',    x: 1100, y: 650,  neighbors: ['D_CAF_NAV', 'D_CAF_SEC', 'D_CAF_WEAP', 'D_CAF_STOR'] },
-  NAVIGATION:   { id: 'NAVIGATION',   x: 1750, y: 675,  neighbors: ['D_CAF_NAV'] },
-  SECURITY:     { id: 'SECURITY',     x: 590,  y: 650,  neighbors: ['D_CAF_SEC', 'D_SEC_REA', 'D_SEC_ELEC'] },
-  REACTOR:      { id: 'REACTOR',      x: 220,  y: 610,  neighbors: ['D_SEC_REA', 'D_REA_UE', 'D_LE_REA'] },
-  UPPER_ENGINE: { id: 'UPPER_ENGINE', x: 280,  y: 260,  neighbors: ['D_REA_UE', 'D_UE_MED'] },
-  MEDBAY:       { id: 'MEDBAY',       x: 660,  y: 290,  neighbors: ['D_UE_MED', 'D_MED_WEAP'] },
-  WEAPONS:      { id: 'WEAPONS',      x: 830,  y: 150,  neighbors: ['D_MED_WEAP', 'D_CAF_WEAP'] },
-  ELECTRICAL:   { id: 'ELECTRICAL',   x: 630,  y: 1085, neighbors: ['D_SEC_ELEC', 'D_ELEC_LE', 'D_ELEC_STOR'] },
-  LOWER_ENGINE: { id: 'LOWER_ENGINE', x: 250,  y: 1070, neighbors: ['D_ELEC_LE', 'D_LE_REA'] },
-  STORAGE:      { id: 'STORAGE',      x: 1170, y: 1120, neighbors: ['D_ELEC_STOR', 'D_CAF_STOR', 'D_STOR_ADM'] },
-  ADMIN:        { id: 'ADMIN',        x: 1490, y: 1210, neighbors: ['D_STOR_ADM'] },
+  FUMODROMO:      { id: 'FUMODROMO', x: 205, y: 330, neighbors: ['D_FUMO'] },
+  CONSULTORIA:    { id: 'CONSULTORIA', x: 585, y: 180, neighbors: ['D_CONSULT'] },
+  SALA_LAZER:     { id: 'SALA_LAZER', x: 710, y: 430, neighbors: ['D_LAZER'] },
+  BANHEIRO_NORTE: { id: 'BANHEIRO_NORTE', x: 900, y: 160, neighbors: ['D_BATH_N'] },
+  ACESSO_NORTE:   { id: 'ACESSO_NORTE', x: 900, y: 420, neighbors: ['D_BATH_N', 'D_ACCESS_N'] },
+  AREA_VERDE:     { id: 'AREA_VERDE', x: 1200, y: 170, neighbors: ['D_GREEN'] },
+  ATRIO:          { id: 'ATRIO', x: 1050, y: 420, neighbors: ['D_GREEN', 'D_ATRIO'] },
+  DESENVOLVIMENTO: { id: 'DESENVOLVIMENTO', x: 1770, y: 260, neighbors: ['D_DEV'] },
+  COMERCIAL:      { id: 'COMERCIAL', x: 2110, y: 310, neighbors: ['D_COMM'] },
+  BANHEIRO_LESTE: { id: 'BANHEIRO_LESTE', x: 2260, y: 150, neighbors: ['D_BATH_E'] },
+  ACESSO_LESTE:   { id: 'ACESSO_LESTE', x: 2260, y: 410, neighbors: ['D_BATH_E', 'D_ACCESS_E'] },
+  COZINHA:        { id: 'COZINHA', x: 600, y: 795, neighbors: ['D_KITCHEN', 'D_BATH_M', 'D_BATH_F'] },
+  BANHEIRO_M:     { id: 'BANHEIRO_M', x: 775, y: 720, neighbors: ['D_BATH_M'] },
+  BANHEIRO_F:     { id: 'BANHEIRO_F', x: 775, y: 865, neighbors: ['D_BATH_F'] },
+  SALA_DIGUINHO:  { id: 'SALA_DIGUINHO', x: 1120, y: 795, neighbors: ['D_DIGUINHO'] },
+  SUPRIMENTOS:    { id: 'SUPRIMENTOS', x: 1420, y: 720, neighbors: ['D_SUPPLY', 'D_SERVER'] },
+  SERVER:         { id: 'SERVER', x: 1420, y: 880, neighbors: ['D_SERVER'] },
+  SALA_TONHO:     { id: 'SALA_TONHO', x: 1840, y: 795, neighbors: ['D_TONHO'] },
+  GARAGEM:        { id: 'GARAGEM', x: 2110, y: 690, neighbors: ['D_GARAGE'] },
 
-  // Doorway / Corridor nodes
-  D_CAF_NAV:    { id: 'D_CAF_NAV',    x: 1450, y: 650,  neighbors: ['CAFETERIA', 'NAVIGATION'] },
-  D_CAF_SEC:    { id: 'D_CAF_SEC',    x: 810,  y: 650,  neighbors: ['CAFETERIA', 'SECURITY'] },
-  D_CAF_WEAP:   { id: 'D_CAF_WEAP',   x: 1080, y: 470,  neighbors: ['CAFETERIA', 'WEAPONS'] },
-  D_CAF_STOR:   { id: 'D_CAF_STOR',   x: 1100, y: 890,  neighbors: ['CAFETERIA', 'STORAGE'] },
-  D_SEC_REA:    { id: 'D_SEC_REA',    x: 410,  y: 650,  neighbors: ['SECURITY', 'REACTOR'] },
-  D_SEC_ELEC:   { id: 'D_SEC_ELEC',   x: 590,  y: 860,  neighbors: ['SECURITY', 'ELECTRICAL'] },
-  D_REA_UE:     { id: 'D_REA_UE',     x: 220,  y: 420,  neighbors: ['REACTOR', 'UPPER_ENGINE'] },
-  D_UE_MED:     { id: 'D_UE_MED',     x: 460,  y: 260,  neighbors: ['UPPER_ENGINE', 'MEDBAY'] },
-  D_MED_WEAP:   { id: 'D_MED_WEAP',   x: 750,  y: 200,  neighbors: ['MEDBAY', 'WEAPONS'] },
-  D_ELEC_LE:    { id: 'D_ELEC_LE',    x: 370,  y: 1085, neighbors: ['ELECTRICAL', 'LOWER_ENGINE'] },
-  D_LE_REA:     { id: 'D_LE_REA',     x: 220,  y: 800,  neighbors: ['LOWER_ENGINE', 'REACTOR'] },
-  D_ELEC_STOR:  { id: 'D_ELEC_STOR',  x: 890,  y: 1120, neighbors: ['ELECTRICAL', 'STORAGE'] },
-  D_STOR_ADM:   { id: 'D_STOR_ADM',   x: 1310, y: 1210, neighbors: ['STORAGE', 'ADMIN'] },
+  D_FUMO:      { id: 'D_FUMO', x: 295, y: 530, neighbors: ['FUMODROMO', 'C_FUMO'] },
+  D_CONSULT:   { id: 'D_CONSULT', x: 510, y: 530, neighbors: ['CONSULTORIA', 'C_CONSULT'] },
+  D_LAZER:     { id: 'D_LAZER', x: 710, y: 530, neighbors: ['SALA_LAZER', 'C_LAZER'] },
+  D_BATH_N:    { id: 'D_BATH_N', x: 900, y: 280, neighbors: ['BANHEIRO_NORTE', 'ACESSO_NORTE'] },
+  D_ACCESS_N:  { id: 'D_ACCESS_N', x: 900, y: 530, neighbors: ['ACESSO_NORTE', 'C_ACCESS_N'] },
+  D_GREEN:     { id: 'D_GREEN', x: 1200, y: 280, neighbors: ['AREA_VERDE', 'ATRIO'] },
+  D_ATRIO:     { id: 'D_ATRIO', x: 1050, y: 530, neighbors: ['ATRIO', 'C_ATRIO'] },
+  D_DEV:       { id: 'D_DEV', x: 1750, y: 530, neighbors: ['DESENVOLVIMENTO', 'C_DEV'] },
+  D_COMM:      { id: 'D_COMM', x: 2030, y: 530, neighbors: ['COMERCIAL', 'C_COMM'] },
+  D_BATH_E:    { id: 'D_BATH_E', x: 2250, y: 260, neighbors: ['BANHEIRO_LESTE', 'ACESSO_LESTE'] },
+  D_ACCESS_E:  { id: 'D_ACCESS_E', x: 2250, y: 530, neighbors: ['ACESSO_LESTE', 'C_ACCESS_E'] },
+  D_KITCHEN:   { id: 'D_KITCHEN', x: 285, y: 680, neighbors: ['COZINHA', 'C_KITCHEN'] },
+  D_BATH_M:    { id: 'D_BATH_M', x: 680, y: 730, neighbors: ['COZINHA', 'BANHEIRO_M'] },
+  D_BATH_F:    { id: 'D_BATH_F', x: 680, y: 865, neighbors: ['COZINHA', 'BANHEIRO_F'] },
+  D_DIGUINHO:  { id: 'D_DIGUINHO', x: 1150, y: 680, neighbors: ['SALA_DIGUINHO', 'C_DIGUINHO'] },
+  D_SUPPLY:    { id: 'D_SUPPLY', x: 1400, y: 680, neighbors: ['SUPRIMENTOS', 'C_SUPPLY'] },
+  D_SERVER:    { id: 'D_SERVER', x: 1520, y: 820, neighbors: ['SUPRIMENTOS', 'SERVER'] },
+  D_TONHO:     { id: 'D_TONHO', x: 1680, y: 680, neighbors: ['SALA_TONHO', 'C_TONHO'] },
+  D_GARAGE:    { id: 'D_GARAGE', x: 2120, y: 680, neighbors: ['GARAGEM', 'C_GARAGE'] },
+
+  C_FUMO:     { id: 'C_FUMO', x: 295, y: 605, neighbors: ['D_FUMO', 'C_CONSULT', 'C_KITCHEN'] },
+  C_KITCHEN:  { id: 'C_KITCHEN', x: 285, y: 605, neighbors: ['D_KITCHEN', 'C_FUMO'] },
+  C_CONSULT:  { id: 'C_CONSULT', x: 510, y: 605, neighbors: ['D_CONSULT', 'C_FUMO', 'C_LAZER'] },
+  C_LAZER:    { id: 'C_LAZER', x: 710, y: 605, neighbors: ['D_LAZER', 'C_CONSULT', 'C_ACCESS_N'] },
+  C_ACCESS_N: { id: 'C_ACCESS_N', x: 900, y: 605, neighbors: ['D_ACCESS_N', 'C_LAZER', 'C_ATRIO'] },
+  C_ATRIO:    { id: 'C_ATRIO', x: 1050, y: 605, neighbors: ['D_ATRIO', 'C_ACCESS_N', 'C_DIGUINHO'] },
+  C_DIGUINHO: { id: 'C_DIGUINHO', x: 1150, y: 605, neighbors: ['D_DIGUINHO', 'C_ATRIO', 'C_SUPPLY'] },
+  C_SUPPLY:   { id: 'C_SUPPLY', x: 1400, y: 605, neighbors: ['D_SUPPLY', 'C_DIGUINHO', 'C_TONHO'] },
+  C_TONHO:    { id: 'C_TONHO', x: 1680, y: 605, neighbors: ['D_TONHO', 'C_SUPPLY', 'C_DEV'] },
+  C_DEV:      { id: 'C_DEV', x: 1750, y: 605, neighbors: ['D_DEV', 'C_TONHO', 'C_COMM'] },
+  C_COMM:     { id: 'C_COMM', x: 2030, y: 605, neighbors: ['D_COMM', 'C_DEV', 'C_GARAGE'] },
+  C_GARAGE:   { id: 'C_GARAGE', x: 2120, y: 605, neighbors: ['D_GARAGE', 'C_COMM', 'C_ACCESS_E'] },
+  C_ACCESS_E: { id: 'C_ACCESS_E', x: 2250, y: 605, neighbors: ['D_ACCESS_E', 'C_GARAGE'] }
 };
 
 export function findAStarPath(from: Vector2D, to: Vector2D): Vector2D[] {
-  // Find nearest start and end waypoints
   const startKey = findNearestWaypoint(from);
   const endKey = findNearestWaypoint(to);
-
-  if (!startKey || !endKey) return [to];
   if (startKey === endKey) return [to];
 
-  // BFS / A* for shortest node path
   const queue: string[][] = [[startKey]];
   const visited = new Set<string>([startKey]);
-  let foundPathKeys: string[] | null = null;
 
   while (queue.length > 0) {
-    const pathKeys = queue.shift()!;
-    const lastKey = pathKeys[pathKeys.length - 1];
-
+    const path = queue.shift()!;
+    const lastKey = path[path.length - 1];
     if (lastKey === endKey) {
-      foundPathKeys = pathKeys;
-      break;
+      return [...path.map(key => ({ x: WAYPOINTS[key].x, y: WAYPOINTS[key].y })), to];
     }
 
-    const node = WAYPOINTS[lastKey];
-    if (node) {
-      for (const neighborKey of node.neighbors) {
-        if (!visited.has(neighborKey)) {
-          visited.add(neighborKey);
-          queue.push([...pathKeys, neighborKey]);
-        }
+    for (const neighbor of WAYPOINTS[lastKey]?.neighbors ?? []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push([...path, neighbor]);
       }
     }
   }
 
-  if (!foundPathKeys) return [to];
-
-  const waypoints: Vector2D[] = foundPathKeys.map(k => ({ x: WAYPOINTS[k].x, y: WAYPOINTS[k].y }));
-  waypoints.push(to);
-  return waypoints;
+  return [to];
 }
 
-function findNearestWaypoint(pos: Vector2D): string {
-  let closestKey = 'CAFETERIA';
-  let minDistance = Infinity;
+function findNearestWaypoint(position: Vector2D): string {
+  const room = ROOMS.find(candidate =>
+    position.x >= candidate.x &&
+    position.x <= candidate.x + candidate.width &&
+    position.y >= candidate.y &&
+    position.y <= candidate.y + candidate.height
+  );
+  if (room && WAYPOINTS[room.id]) return room.id;
 
-  for (const [key, wp] of Object.entries(WAYPOINTS)) {
-    const dx = wp.x - pos.x;
-    const dy = wp.y - pos.y;
-    const dist = dx * dx + dy * dy;
-    if (dist < minDistance) {
-      minDistance = dist;
-      closestKey = key;
+  let closest = 'C_ATRIO';
+  let closestDistance = Infinity;
+
+  for (const [key, waypoint] of Object.entries(WAYPOINTS)) {
+    const distance = (waypoint.x - position.x) ** 2 + (waypoint.y - position.y) ** 2;
+    if (distance < closestDistance) {
+      closest = key;
+      closestDistance = distance;
     }
   }
-
-  return closestKey;
+  return closest;
 }
 
-type BotPersonality = 'DETETIVE' | 'DEFENSIVO' | 'ACUSADOR' | 'CAUTELOSO' | 'OBSERVADOR' | 'JOKER';
-const PERSONALITIES: BotPersonality[] = ['DETETIVE', 'DEFENSIVO', 'ACUSADOR', 'CAUTELOSO', 'OBSERVADOR', 'JOKER'];
+type BotPersonality = 'analítico' | 'cauteloso' | 'impulsivo' | 'sociável' | 'desconfiado';
+const PERSONALITIES: BotPersonality[] = ['analítico', 'cauteloso', 'impulsivo', 'sociável', 'desconfiado'];
+
+interface SeenPlayer {
+  name: string;
+  room: string;
+  time: number;
+}
 
 interface BotMemory {
   personality: BotPersonality;
   currentRoomName: string;
   previousRoom: string;
-  seenPlayers: Map<string, { name: string; room: string; time: number }>;
-  seenBodies: string[];
-  suspicionTarget: string | null;
-  alibiPartner: string | null;
-  myCurrentTaskIndex: number;
+  seenPlayers: Map<string, SeenPlayer>;
+  seenBodies: Set<string>;
   taskTimer: number;
-  moveTarget: Vector2D | null;
+  pathTarget: Vector2D | null;
   currentPath: Vector2D[];
   pathIndex: number;
+  decision: BotActionDecision | null;
+  decisionPending: boolean;
+  nextDecisionAt: number;
   chatCount: number;
-  maxChats: number;
-  lastChatTime: number;
   pendingDefense: boolean;
 }
 
-// Gemini AI chat with conversation history for natural dialogue
-async function generateGeminiBotChat(
-  botName: string,
-  botRole: 'CREWMATE' | 'IMPOSTOR',
-  personality: BotPersonality,
-  currentRoom: string,
-  previousRoom: string,
-  reason: 'BODY' | 'EMERGENCY',
-  reporterName: string,
-  livingPlayers: string[],
-  recentChat: string[], // last 5 chat messages for context
-  suspicionTarget: string | null,
-  alibiPartner: string | null
-): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const roleDesc = botRole === 'IMPOSTOR'
-      ? 'Você é o ASSASSINO. Minta, desvie atenção, acuse outros. Nunca admita.'
-      : 'Você é TRIPULANTE inocente. Analise, investigue, acuse quem parecer suspeito.';
-
-    const chatContext = recentChat.length > 0
-      ? `Mensagens recentes do chat:\n${recentChat.join('\n')}\n`
-      : '';
-
-    const suspicion = suspicionTarget ? `Você desconfia de ${suspicionTarget}.` : '';
-    const alibi = alibiPartner ? `Você estava com ${alibiPartner} antes da reunião.` : '';
-
-    const prompt = `Você é "${botName}" em MetaMurder (jogo de dedução social). Personalidade: ${personality}. ${roleDesc}
-Local: ${currentRoom} (antes: ${previousRoom}). ${suspicion} ${alibi}
-Evento: ${reason === 'BODY' ? `Corpo denunciado por ${reporterName}` : 'Reunião de emergência'}.
-Jogadores vivos: ${livingPlayers.join(', ')}.
-${chatContext}
-Responda ao chat como um jogador REAL brasileiro. Use gírias, abreviações, seja informal. Máximo 15 palavras. Responda ou reaja à última mensagem se relevante. Sem aspas.`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
-
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 40, temperature: 1.0 }
-      }),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeout);
-    if (!response.ok) return null;
-    const data = await response.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return reply ? reply.replace(/^["']|["']$/g, '') : null;
-  } catch {
-    return null;
-  }
-}
-
-// === RICH FALLBACK CHAT POOLS ===
-const CREW_BODY_POOL: Record<BotPersonality, string[]> = {
-  DETETIVE: [
-    'Onde acharam o corpo? Quem estava perto?',
-    'Alguém tem prova? Eu preciso de informação.',
-    'Quem foi a última pessoa vista perto de lá?',
-    'Suspeito de quem estava na mesma sala do corpo.',
-  ],
-  DEFENSIVO: [
-    'Eu estava longe, pode me limpar.',
-    'Juro que tava fazendo tarefa na {room}.',
-    'Tava com {alibi} o tempo todo, pergunta pra ele.',
-    'Eu nem cheguei perto do corpo.',
-  ],
-  ACUSADOR: [
-    'Quem denunciou? Pode ser auto-report...',
-    'Aposto que foi o {suspect}, tava estranho!',
-    'Muito conveniente aparecer o corpo agora né.',
-    'Eu vi {suspect} se movendo estranho!',
-  ],
-  CAUTELOSO: [
-    'Sem prova clara melhor pular o voto.',
-    'Calma gente, vamos pensar direito.',
-    'Não vamos expulsar inocente por favor.',
-    'Alguém tem certeza de algo? Se não, skip.',
-  ],
-  OBSERVADOR: [
-    'Eu não vi nada suspeito por enquanto.',
-    'Fiquem atentos, vou observar mais.',
-    'Cruzei com gente na {room} mas nada demais.',
-    'Vamos ver quem não tem álibi.',
-  ],
-  JOKER: [
-    'kkkk quem morreu? triste',
-    'mano, outro corpo? tá difícil',
-    'se votar em mim vou chorar irl',
-    'alguém reporta corpo e some né kk',
-  ]
-};
-
-const CREW_EMERGENCY_POOL: Record<BotPersonality, string[]> = {
-  DETETIVE: ['Pq chamaram emergência? Alguém viu algo?', 'Tem motivo pra essa emergência?'],
-  DEFENSIVO: ['Eu tava fazendo tarefa, nem vi nada.', 'Sou inocente, tava na {room}.'],
-  ACUSADOR: ['Quem apertou o botão? Isso é sus.', 'Aposto que chamaram pra desviar atenção!'],
-  CAUTELOSO: ['Sem motivo, melhor dar skip.', 'Vamos ouvir antes de acusar.'],
-  OBSERVADOR: ['Alguém tem info? Tô ouvindo.', 'Sem dados, difícil votar.'],
-  JOKER: ['emergência pra quê mano kk', 'apertaram o botão sem querer?'],
-};
-
-const IMP_BODY_POOL: string[] = [
-  'Onde acharam? Eu tava longe.',
-  'Eu tava na {room}, não fui eu.',
-  'Pode ser auto-report hein...',
-  'Eu vi {suspect} perto de lá.',
-  'Gente, eu sou inocente, tava fazendo tarefa.',
-  'Não fui eu, juro.',
-  'Vamos votar em quem não tem álibi.',
-];
-
-const IMP_EMERGENCY_POOL: string[] = [
-  'Emergência pra quê? Eu tava de boa.',
-  'Tava fazendo tarefa na {room}.',
-  'Acho que deveria dar skip se ninguém tem prova.',
-  'Eu juro que não fiz nada.',
-];
-
-// Reaction messages when accused or responding to others
-const REACTION_ACCUSED: string[] = [
-  'Eu?? Tá maluco, não fui eu!',
-  'Mano por que me acusando? Sou inocente!',
-  'Se me expulsar vão perder, sou crew.',
-  'Prova? Eu não fiz nada!',
-  'Olha pra outro, eu tava fazendo tarefa.',
-  'Votando em mim? Sério? Vão se arrepender.',
-];
-
-const REACTION_AGREE: string[] = [
-  'Concordo, vamos votar nele.',
-  'Tô nessa, vota!',
-  'Faz sentido, bora.',
-  'Sim, ele tá muito sus.',
-];
-
 export class BotEngine {
-  private gameEngine: GameEngine;
-  private memories: Map<string, BotMemory> = new Map();
+  private readonly memories = new Map<string, BotMemory>();
+  private readonly ai: BotAIProvider;
+  private readonly gameEngine: GameEngine;
 
-  constructor(gameEngine: GameEngine) {
+  constructor(gameEngine: GameEngine, ai: BotAIProvider = new GeminiBotAI()) {
     this.gameEngine = gameEngine;
+    this.ai = ai;
   }
 
   public initBot(botId: string): void {
+    const personalityIndex = Math.abs(this.hash(botId)) % PERSONALITIES.length;
     this.memories.set(botId, {
-      personality: PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)],
-      currentRoomName: 'Refeitório',
-      previousRoom: 'Refeitório',
+      personality: PERSONALITIES[personalityIndex],
+      currentRoomName: 'Corredor',
+      previousRoom: 'Corredor',
       seenPlayers: new Map(),
-      seenBodies: [],
-      suspicionTarget: null,
-      alibiPartner: null,
-      myCurrentTaskIndex: 0,
+      seenBodies: new Set(),
       taskTimer: 0,
-      moveTarget: null,
+      pathTarget: null,
       currentPath: [],
       pathIndex: 0,
+      decision: null,
+      decisionPending: false,
+      nextDecisionAt: 0,
       chatCount: 0,
-      maxChats: 2 + Math.floor(Math.random() * 2), // 2-3
-      lastChatTime: 0,
-      pendingDefense: false,
+      pendingDefense: false
     });
   }
 
   public tick(bot: GamePlayer, deltaTime: number): void {
-    if (bot.state === 'DEAD' || bot.state === 'GHOST') return;
-    let memory = this.memories.get(bot.id);
-    if (!memory) { this.initBot(bot.id); memory = this.memories.get(bot.id)!; }
+    if (bot.state !== 'ALIVE' || this.gameEngine.phase !== 'PLAYING') return;
+    const memory = this.getMemory(bot.id);
 
-    if (this.gameEngine.phase === 'MEETING') return;
-    if (this.gameEngine.phase !== 'PLAYING') return;
-
-    // Reset meeting state
-    memory.chatCount = 0;
-    memory.maxChats = 2 + Math.floor(Math.random() * 2);
-
-    // Track room
-    const prevRoom = memory.currentRoomName;
-    const currentRoom = ROOMS.find(r =>
-      bot.x >= r.x && bot.x <= r.x + r.width &&
-      bot.y >= r.y && bot.y <= r.y + r.height
-    );
-    if (currentRoom) {
-      memory.previousRoom = prevRoom;
-      memory.currentRoomName = currentRoom.name;
-    }
-
-    this.updateVisionMemory(bot, memory);
-
-    // Bodies
-    for (const body of this.gameEngine.bodies) {
-      if (!body.reported && this.dist(bot, body) < 140) {
-        if (!memory.seenBodies.includes(body.id)) {
-          memory.seenBodies.push(body.id);
-          if (bot.role === 'CREWMATE' || Math.random() < 0.5) {
-            this.gameEngine.reportBody(bot.id, body.id);
-            return;
-          }
-        }
-      }
-    }
-
-    // Sabotage response
-    const activeSab = this.gameEngine.sabotage.activeType;
-    if (activeSab && bot.role === 'CREWMATE') {
-      if (activeSab === 'LIGHTS') {
-        this.moveTowards(bot, SABOTAGE_NODES.LIGHTS_BREAKER, deltaTime);
-        if (this.dist(bot, SABOTAGE_NODES.LIGHTS_BREAKER) < 70) this.gameEngine.resolveSabotageNode(bot.id, 'LIGHTS_BREAKER');
-        return;
-      } else if (activeSab === 'REACTOR') {
-        this.moveTowards(bot, SABOTAGE_NODES.REACTOR_PAD_1, deltaTime);
-        if (this.dist(bot, SABOTAGE_NODES.REACTOR_PAD_1) < 70) this.gameEngine.resolveSabotageNode(bot.id, 'REACTOR_PAD_1');
-        return;
-      }
-    }
-
-    if (bot.role === 'CREWMATE') this.tickCrewmate(bot, memory, deltaTime);
-    else this.tickImpostor(bot, memory, deltaTime);
+    this.updateRoom(bot, memory);
+    this.updateVision(bot, memory);
+    this.requestWorldDecisionWhenNeeded(bot, memory);
+    this.executeDecision(bot, memory, deltaTime);
   }
 
-  private tickCrewmate(bot: GamePlayer, memory: BotMemory, dt: number): void {
-    if (bot.tasks.length === 0) return;
-    const task = bot.tasks[memory.myCurrentTaskIndex];
-    if (!task || task.completed) {
-      const next = bot.tasks.findIndex(t => !t.completed);
-      if (next !== -1) memory.myCurrentTaskIndex = next;
-      return;
-    }
-    const d = this.dist(bot, { x: task.x, y: task.y });
-    if (d > 50) { this.moveTowards(bot, { x: task.x, y: task.y }, dt); memory.taskTimer = 0; }
-    else {
-      bot.vx = 0; bot.vy = 0;
-      memory.taskTimer += dt;
-      if (memory.taskTimer >= 3.0) {
-        this.gameEngine.completeTask(bot.id, task.id);
-        memory.taskTimer = 0;
-        memory.myCurrentTaskIndex = (memory.myCurrentTaskIndex + 1) % bot.tasks.length;
-      }
-    }
-  }
-
-  private tickImpostor(bot: GamePlayer, memory: BotMemory, dt: number): void {
-    if (bot.killCooldownRemaining <= 0) {
-      const targets = Array.from(this.gameEngine.players.values()).filter(p =>
-        p.id !== bot.id && p.state === 'ALIVE' && p.role === 'CREWMATE' && !p.inVent
-      );
-      for (const t of targets) {
-        if (this.dist(bot, t) < 90) {
-          const witnesses = targets.filter(o => o.id !== t.id && this.dist(t, o) < 220);
-          if (witnesses.length === 0) {
-            this.gameEngine.killPlayer(bot.id, t.id);
-            if (Math.random() < 0.35) {
-              const vent = VENTS.find(v => this.dist(bot, v) < 120);
-              if (vent) this.gameEngine.useVent(bot.id, vent.id);
-            }
-            return;
-          }
-        }
-      }
-    }
-
-    if (bot.sabotageCooldownRemaining <= 0 && Math.random() < 0.02) {
-      const types: ('LIGHTS' | 'REACTOR' | 'O2')[] = ['LIGHTS', 'REACTOR', 'O2'];
-      this.gameEngine.triggerSabotage(bot.id, types[Math.floor(Math.random() * types.length)]);
-    }
-
-    if (!memory.moveTarget || this.dist(bot, memory.moveTarget) < 40) {
-      const room = ROOMS[Math.floor(Math.random() * ROOMS.length)];
-      memory.moveTarget = {
-        x: room.x + room.width / 2 + (Math.random() * 80 - 40),
-        y: room.y + room.height / 2 + (Math.random() * 80 - 40)
-      };
-    }
-    this.moveTowards(bot, memory.moveTarget, dt);
-  }
-
-  // === MEETING DISCUSSION (multiple messages, reactive) ===
   public handleMeetingDiscussion(bot: GamePlayer): void {
-    if (bot.state === 'DEAD' || bot.state === 'GHOST') return;
-    const memory = this.memories.get(bot.id);
-    const meeting = this.gameEngine.meetingState;
-    if (!meeting || !memory) return;
+    if (bot.state !== 'ALIVE') return;
+    const memory = this.getMemory(bot.id);
+    memory.chatCount = 0;
+    memory.decision = null;
 
-    // Build suspicion and alibi
-    this.buildSuspicionAndAlibi(bot, memory);
-
-    // Send 2-3 staggered messages
-    for (let i = 0; i < memory.maxChats; i++) {
-      const delay = 1500 + (i * 3000) + Math.floor(Math.random() * 2000);
-      setTimeout(() => this.sendBotChat(bot, memory, i), delay);
-    }
+    [1200, 5600].forEach(delay => {
+      setTimeout(() => void this.sendAIChat(bot, memory), delay + Math.abs(this.hash(bot.id)) % 700);
+    });
   }
 
-  /**
-   * React to a human mentioning a living bot during a meeting. This is
-   * triggered by the incoming message instead of waiting for one of the
-   * discussion messages scheduled when the meeting began.
-   */
   public handleChatMention(sender: GamePlayer, text: string): void {
     if (!this.gameEngine.meetingState || this.gameEngine.phase !== 'MEETING') return;
     if (sender.isBot || sender.state !== 'ALIVE') return;
 
     for (const bot of this.gameEngine.players.values()) {
-      if (!bot.isBot || bot.state !== 'ALIVE' || bot.id === sender.id) continue;
-      if (!this.mentionsPlayer(text, bot.name)) continue;
-
-      const memory = this.memories.get(bot.id);
-      if (!memory || memory.pendingDefense) continue;
+      if (!bot.isBot || bot.state !== 'ALIVE' || !this.mentionsPlayer(text, bot.name)) continue;
+      const memory = this.getMemory(bot.id);
+      if (memory.pendingDefense) continue;
 
       memory.pendingDefense = true;
-      const delay = 450 + Math.floor(Math.random() * 400);
-
       setTimeout(() => {
-        memory.pendingDefense = false;
-        if (this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState) return;
-        if (bot.state !== 'ALIVE') return;
-
-        const defense = REACTION_ACCUSED[Math.floor(Math.random() * REACTION_ACCUSED.length)];
-        this.gameEngine.sendChatMessage(bot.id, defense);
-      }, delay);
+        void this.sendAIChat(
+          bot,
+          memory,
+          `${sender.name} mencionou você diretamente. Responda à mensagem de forma natural e defenda-se se houver acusação.`
+        ).finally(() => {
+          memory.pendingDefense = false;
+        });
+      }, 450);
     }
+  }
+
+  public handleMeetingVoting(bot: GamePlayer): void {
+    if (bot.state !== 'ALIVE') return;
+
+    const delay = 1800 + Math.abs(this.hash(`${bot.id}:vote`)) % 2200;
+    setTimeout(() => void this.castAIVote(bot), delay);
+  }
+
+  private requestWorldDecisionWhenNeeded(bot: GamePlayer, memory: BotMemory): void {
+    const now = Date.now();
+    if (memory.decisionPending || now < memory.nextDecisionAt) return;
+
+    if (!this.ai.configured) {
+      memory.decision = this.safeOfflineMovement(bot);
+      memory.nextDecisionAt = now + 5000;
+      return;
+    }
+
+    memory.decisionPending = true;
+    const validTargets = this.validWorldTargets(bot, memory);
+    const context = this.buildContext(bot, memory, false);
+
+    void this.ai.chooseAction(context, validTargets).then(decision => {
+      if (this.gameEngine.phase !== 'PLAYING' || bot.state !== 'ALIVE') return;
+      if (decision && this.isDecisionAllowed(bot, decision, validTargets)) {
+        memory.decision = decision;
+        memory.pathTarget = null;
+        memory.currentPath = [];
+        memory.pathIndex = 0;
+        memory.taskTimer = 0;
+      }
+      const configuredInterval = Number(process.env.GEMINI_ACTION_INTERVAL_MS);
+      const baseInterval = Number.isFinite(configuredInterval) && configuredInterval >= 5000
+        ? configuredInterval
+        : 12_000;
+      memory.nextDecisionAt = Date.now() + baseInterval + Math.abs(this.hash(`${bot.id}:${now}`)) % 3000;
+    }).finally(() => {
+      memory.decisionPending = false;
+      if (!memory.decision) memory.nextDecisionAt = Date.now() + 3000;
+    });
+  }
+
+  private executeDecision(bot: GamePlayer, memory: BotMemory, deltaTime: number): void {
+    const decision = memory.decision ?? this.safeOfflineMovement(bot);
+
+    switch (decision.action) {
+      case 'DO_TASK':
+        this.executeTask(bot, memory, decision.target, deltaTime);
+        return;
+      case 'GO_ROOM': {
+        const room = ROOMS.find(candidate => candidate.id === decision.target);
+        if (!room) return this.invalidateDecision(memory);
+        this.moveTowards(bot, memory, {
+          x: room.x + room.width / 2,
+          y: room.y + room.height / 2
+        }, deltaTime);
+        return;
+      }
+      case 'FOLLOW_PLAYER':
+      case 'HUNT_PLAYER': {
+        const target = this.gameEngine.players.get(decision.target);
+        if (!target || target.state !== 'ALIVE' || target.inVent || target.id === bot.id) {
+          return this.invalidateDecision(memory);
+        }
+        this.moveTowards(bot, memory, target, deltaTime);
+        if (
+          decision.action === 'HUNT_PLAYER' &&
+          bot.role === 'IMPOSTOR' &&
+          bot.killCooldownRemaining <= 0 &&
+          this.distance(bot, target) < 90
+        ) {
+          this.gameEngine.killPlayer(bot.id, target.id);
+          this.invalidateDecision(memory);
+        }
+        return;
+      }
+      case 'REPORT_BODY': {
+        const body = this.gameEngine.bodies.find(candidate => candidate.id === decision.target && !candidate.reported);
+        if (!body) return this.invalidateDecision(memory);
+        this.moveTowards(bot, memory, body, deltaTime);
+        if (this.distance(bot, body) <= 140) {
+          this.gameEngine.reportBody(bot.id, body.id);
+          this.invalidateDecision(memory);
+        }
+        return;
+      }
+      case 'FIX_SABOTAGE':
+        this.executeSabotageFix(bot, memory, deltaTime);
+        return;
+      case 'SABOTAGE':
+        if (bot.role === 'IMPOSTOR' && decision.sabotageType !== 'NONE') {
+          this.gameEngine.triggerSabotage(bot.id, decision.sabotageType);
+        }
+        this.invalidateDecision(memory);
+        return;
+      case 'WAIT':
+      default:
+        bot.vx = 0;
+        bot.vy = 0;
+    }
+  }
+
+  private executeTask(bot: GamePlayer, memory: BotMemory, targetId: string, deltaTime: number): void {
+    if (bot.role !== 'CREWMATE') return this.invalidateDecision(memory);
+    const task = bot.tasks.find(candidate =>
+      !candidate.completed && (candidate.id === targetId || candidate.definitionId === targetId)
+    ) ?? bot.tasks.find(candidate => !candidate.completed);
+    if (!task) return this.invalidateDecision(memory);
+
+    if (this.distance(bot, task) > 55) {
+      memory.taskTimer = 0;
+      this.moveTowards(bot, memory, task, deltaTime);
+      return;
+    }
+
+    bot.vx = 0;
+    bot.vy = 0;
+    memory.taskTimer += deltaTime;
+    if (memory.taskTimer >= 2.5) {
+      this.gameEngine.completeTask(bot.id, task.id);
+      this.invalidateDecision(memory);
+    }
+  }
+
+  private executeSabotageFix(bot: GamePlayer, memory: BotMemory, deltaTime: number): void {
+    if (bot.role !== 'CREWMATE' || !this.gameEngine.sabotage.activeType) {
+      return this.invalidateDecision(memory);
+    }
+
+    const candidates = this.sabotageNodesForCurrentType()
+      .filter(node => !this.gameEngine.sabotage.resolvedNodes.includes(node.id));
+    const node = candidates.sort((a, b) => this.distance(bot, a) - this.distance(bot, b))[0];
+    if (!node) return this.invalidateDecision(memory);
+
+    this.moveTowards(bot, memory, node, deltaTime);
+    if (this.distance(bot, node) <= 65) {
+      this.gameEngine.resolveSabotageNode(bot.id, node.id);
+      this.invalidateDecision(memory);
+    }
+  }
+
+  private async sendAIChat(bot: GamePlayer, memory: BotMemory, reaction?: string): Promise<void> {
+    if (bot.state !== 'ALIVE' || this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState) return;
+    if (!reaction && memory.chatCount >= 2) return;
+    if (!reaction) memory.chatCount++;
+
+    const message = await this.ai.createChat(this.buildContext(bot, memory, true), reaction);
+    if (
+      message &&
+      this.gameEngine.phase === 'MEETING' &&
+      this.gameEngine.meetingState &&
+      bot.state === 'ALIVE'
+    ) {
+      this.gameEngine.sendChatMessage(bot.id, message);
+    }
+  }
+
+  private async castAIVote(bot: GamePlayer): Promise<void> {
+    if (this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState || bot.state !== 'ALIVE') return;
+    const memory = this.getMemory(bot.id);
+    const eligible = Array.from(this.gameEngine.players.values())
+      .filter(player => player.state === 'ALIVE' && player.id !== bot.id)
+      .map(player => player.id);
+    eligible.push('SKIP');
+
+    const targetId = await this.ai.chooseVote(this.buildContext(bot, memory, true), eligible);
+    if (this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState) return;
+    this.gameEngine.castVote(bot.id, targetId && eligible.includes(targetId) ? targetId : 'SKIP');
+  }
+
+  private buildContext(bot: GamePlayer, memory: BotMemory, includeChat: boolean): string {
+    const now = Date.now();
+    const visiblePlayers = Array.from(this.gameEngine.players.values())
+      .filter(player => player.id !== bot.id && player.state === 'ALIVE')
+      .map(player => ({
+        id: player.id,
+        name: player.name,
+        state: player.state,
+        distance: Math.round(this.distance(bot, player)),
+        lastSeen: memory.seenPlayers.get(player.id) ?? null,
+        knownAlly: bot.role === 'IMPOSTOR' && player.role === 'IMPOSTOR'
+      }));
+    const visibleBodies = this.gameEngine.bodies
+      .filter(body => !body.reported && (this.distance(bot, body) <= 320 || memory.seenBodies.has(body.id)))
+      .map(body => ({ id: body.id, victim: body.victimName, distance: Math.round(this.distance(bot, body)) }));
+    const tasks = bot.role === 'CREWMATE'
+      ? bot.tasks.map(task => ({
+        id: task.id,
+        type: task.type,
+        room: task.roomName,
+        completed: task.completed
+      }))
+      : [];
+    const chat = includeChat
+      ? this.gameEngine.chatMessages.slice(-12).map(message => `${message.senderName}: ${message.text}`)
+      : [];
+
+    return JSON.stringify({
+      self: {
+        id: bot.id,
+        name: bot.name,
+        secretRole: bot.role,
+        personality: memory.personality,
+        room: memory.currentRoomName,
+        previousRoom: memory.previousRoom,
+        killReady: bot.role === 'IMPOSTOR' && bot.killCooldownRemaining <= 0,
+        sabotageReady: bot.role === 'IMPOSTOR' && bot.sabotageCooldownRemaining <= 0
+      },
+      phase: this.gameEngine.phase,
+      meeting: this.gameEngine.meetingState
+        ? { reporter: this.gameEngine.meetingState.callerName, phase: this.gameEngine.meetingState.phase }
+        : null,
+      sabotage: this.gameEngine.sabotage.activeType,
+      players: visiblePlayers,
+      bodies: visibleBodies,
+      tasks,
+      recentChat: chat,
+      observedAt: now
+    });
+  }
+
+  private validWorldTargets(bot: GamePlayer, memory: BotMemory): string[] {
+    const targets = new Set<string>(ROOMS.map(room => room.id));
+    for (const player of this.gameEngine.players.values()) {
+      if (player.id !== bot.id && player.state === 'ALIVE') targets.add(player.id);
+    }
+    if (bot.role === 'CREWMATE') {
+      bot.tasks.filter(task => !task.completed).forEach(task => targets.add(task.id));
+    }
+    this.gameEngine.bodies
+      .filter(body => !body.reported && (this.distance(bot, body) <= 320 || memory.seenBodies.has(body.id)))
+      .forEach(body => targets.add(body.id));
+    return Array.from(targets);
+  }
+
+  private isDecisionAllowed(
+    bot: GamePlayer,
+    decision: BotActionDecision,
+    validTargets: string[]
+  ): boolean {
+    if (decision.target && !validTargets.includes(decision.target)) return false;
+    const crewOnly: BotWorldAction[] = ['DO_TASK', 'FIX_SABOTAGE'];
+    const impostorOnly: BotWorldAction[] = ['HUNT_PLAYER', 'SABOTAGE'];
+    if (crewOnly.includes(decision.action) && bot.role !== 'CREWMATE') return false;
+    if (impostorOnly.includes(decision.action) && bot.role !== 'IMPOSTOR') return false;
+    return true;
+  }
+
+  private safeOfflineMovement(bot: GamePlayer): BotActionDecision {
+    if (bot.role === 'CREWMATE') {
+      const task = bot.tasks.find(candidate => !candidate.completed);
+      if (task) return { action: 'DO_TASK', target: task.id, sabotageType: 'NONE' };
+    }
+    const roomIndex = Math.abs(this.hash(`${bot.id}:${Math.floor(Date.now() / 10000)}`)) % ROOMS.length;
+    return { action: 'GO_ROOM', target: ROOMS[roomIndex].id, sabotageType: 'NONE' };
+  }
+
+  private moveTowards(bot: GamePlayer, memory: BotMemory, target: Vector2D, deltaTime: number): void {
+    if (
+      !memory.pathTarget ||
+      this.distance(memory.pathTarget, target) > 35 ||
+      memory.currentPath.length === 0
+    ) {
+      memory.pathTarget = { x: target.x, y: target.y };
+      memory.currentPath = findAStarPath(bot, target);
+      memory.pathIndex = 0;
+    }
+
+    let waypoint = memory.currentPath[memory.pathIndex] ?? target;
+    // Doorways are 70-140 px wide. Reaching their center closely before
+    // advancing prevents bots from clipping the jamb on a diagonal.
+    if (this.distance(bot, waypoint) < 10 && memory.pathIndex < memory.currentPath.length - 1) {
+      memory.pathIndex++;
+      waypoint = memory.currentPath[memory.pathIndex] ?? target;
+    }
+
+    const dx = waypoint.x - bot.x;
+    const dy = waypoint.y - bot.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 4) {
+      bot.vx = 0;
+      bot.vy = 0;
+      return;
+    }
+
+    const speed = 160 * this.gameEngine.settings.playerSpeed;
+    bot.vx = dx / distance * speed;
+    bot.vy = dy / distance * speed;
+    bot.facing = dx < 0 ? 'LEFT' : 'RIGHT';
+    const next = clampPosition(bot, {
+      x: Math.max(26, Math.min(MAP_BOUNDS.width - 26, bot.x + bot.vx * deltaTime)),
+      y: Math.max(26, Math.min(MAP_BOUNDS.height - 26, bot.y + bot.vy * deltaTime))
+    });
+    bot.x = next.x;
+    bot.y = next.y;
+  }
+
+  private updateRoom(bot: GamePlayer, memory: BotMemory): void {
+    const room = ROOMS.find(candidate =>
+      bot.x >= candidate.x &&
+      bot.x <= candidate.x + candidate.width &&
+      bot.y >= candidate.y &&
+      bot.y <= candidate.y + candidate.height
+    );
+    if (room && room.name !== memory.currentRoomName) {
+      memory.previousRoom = memory.currentRoomName;
+      memory.currentRoomName = room.name;
+    }
+  }
+
+  private updateVision(bot: GamePlayer, memory: BotMemory): void {
+    for (const player of this.gameEngine.players.values()) {
+      if (player.id !== bot.id && player.state === 'ALIVE' && !player.inVent && this.distance(bot, player) <= 300) {
+        memory.seenPlayers.set(player.id, {
+          name: player.name,
+          room: memory.currentRoomName,
+          time: Date.now()
+        });
+      }
+    }
+    for (const body of this.gameEngine.bodies) {
+      if (!body.reported && this.distance(bot, body) <= 300 && !memory.seenBodies.has(body.id)) {
+        memory.seenBodies.add(body.id);
+        memory.nextDecisionAt = 0;
+      }
+    }
+  }
+
+  private sabotageNodesForCurrentType(): Array<{ id: string; x: number; y: number }> {
+    switch (this.gameEngine.sabotage.activeType) {
+      case 'LIGHTS':
+        return [{ id: 'LIGHTS_BREAKER', ...SABOTAGE_NODES.LIGHTS_BREAKER }];
+      case 'REACTOR':
+        return [
+          { id: 'REACTOR_PAD_1', ...SABOTAGE_NODES.REACTOR_PAD_1 },
+          { id: 'REACTOR_PAD_2', ...SABOTAGE_NODES.REACTOR_PAD_2 }
+        ];
+      case 'O2':
+        return [
+          { id: 'O2_KEYPAD_1', ...SABOTAGE_NODES.O2_KEYPAD_1 },
+          { id: 'O2_KEYPAD_2', ...SABOTAGE_NODES.O2_KEYPAD_2 }
+        ];
+      default:
+        return [];
+    }
+  }
+
+  private invalidateDecision(memory: BotMemory): void {
+    memory.decision = null;
+    memory.nextDecisionAt = 0;
+    memory.taskTimer = 0;
+    memory.pathTarget = null;
+    memory.currentPath = [];
+    memory.pathIndex = 0;
+  }
+
+  private getMemory(botId: string): BotMemory {
+    if (!this.memories.has(botId)) this.initBot(botId);
+    return this.memories.get(botId)!;
   }
 
   private mentionsPlayer(text: string, playerName: string): boolean {
@@ -453,218 +584,20 @@ export class BotEngine {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLocaleLowerCase('pt-BR');
-
     const escapedName = normalize(playerName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const mentionPattern = new RegExp(
-      `(^|[^\\p{L}\\p{N}_])${escapedName}(?=$|[^\\p{L}\\p{N}_])`,
-      'u'
-    );
-
-    return mentionPattern.test(normalize(text));
+    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escapedName}(?=$|[^\\p{L}\\p{N}_])`, 'u')
+      .test(normalize(text));
   }
 
-  private buildSuspicionAndAlibi(bot: GamePlayer, memory: BotMemory): void {
-    const living = Array.from(this.gameEngine.players.values()).filter(p => p.state === 'ALIVE' && p.id !== bot.id);
-    const seen = Array.from(memory.seenPlayers.values());
-
-    // Alibi: last player seen recently
-    if (seen.length > 0) {
-      memory.alibiPartner = seen[seen.length - 1].name;
-    }
-
-    // Suspicion target
-    if (bot.role === 'CREWMATE') {
-      // Suspect random living player not recently seen
-      const unseen = living.filter(p => !memory.seenPlayers.has(p.id));
-      if (unseen.length > 0) memory.suspicionTarget = unseen[Math.floor(Math.random() * unseen.length)].name;
-      else memory.suspicionTarget = living[Math.floor(Math.random() * living.length)]?.name || null;
-    } else {
-      // Impostor: frame a crewmate
-      const crew = living.filter(p => p.role === 'CREWMATE');
-      memory.suspicionTarget = crew.length > 0 ? crew[Math.floor(Math.random() * crew.length)].name : null;
-    }
+  private distance(a: Vector2D, b: Vector2D): number {
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
-  private async sendBotChat(bot: GamePlayer, memory: BotMemory, msgIndex: number): Promise<void> {
-    if (this.gameEngine.phase !== 'MEETING' && !this.gameEngine.meetingState) return;
-    if (memory.chatCount >= memory.maxChats) return;
-    memory.chatCount++;
-
-    const meeting = this.gameEngine.meetingState;
-    if (!meeting) return;
-
-    const livingNames = Array.from(this.gameEngine.players.values())
-      .filter(p => p.state === 'ALIVE').map(p => p.name);
-
-    // Get recent chat for context-aware responses
-    const recentChat = this.gameEngine.chatMessages
-      .slice(-6)
-      .map(m => `${m.senderName}: ${m.text}`);
-
-    // Check if bot was accused in recent chat
-    const wasAccused = recentChat.some(m =>
-      m.toLowerCase().includes(bot.name.toLowerCase()) &&
-      (m.includes('sus') || m.includes('suspeito') || m.includes('votar') || m.includes('foi') || m.includes('acus'))
-    );
-
-    let msg: string | null = null;
-
-    // If accused, react defensively
-    if (wasAccused && msgIndex > 0) {
-      msg = REACTION_ACCUSED[Math.floor(Math.random() * REACTION_ACCUSED.length)];
-    } else {
-      // Try Gemini AI
-      msg = await generateGeminiBotChat(
-        bot.name, bot.role, memory.personality,
-        memory.currentRoomName, memory.previousRoom,
-        meeting.reason, meeting.callerName,
-        livingNames, recentChat,
-        memory.suspicionTarget, memory.alibiPartner
-      );
+  private hash(value: string): number {
+    let hash = 0;
+    for (let index = 0; index < value.length; index++) {
+      hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
     }
-
-    // Fallback
-    if (!msg) {
-      msg = this.getFallbackMessage(bot, memory, meeting, livingNames, msgIndex, wasAccused);
-    }
-
-    // Replace placeholders
-    msg = msg.replace('{room}', memory.currentRoomName)
-             .replace('{suspect}', memory.suspicionTarget || 'alguém')
-             .replace('{alibi}', memory.alibiPartner || 'ninguém');
-
-    if (this.gameEngine.phase === 'MEETING' || this.gameEngine.meetingState) {
-      this.gameEngine.sendChatMessage(bot.id, msg);
-    }
-  }
-
-  private getFallbackMessage(bot: GamePlayer, memory: BotMemory, meeting: any, livingNames: string[], msgIndex: number, wasAccused: boolean): string {
-    if (wasAccused) return REACTION_ACCUSED[Math.floor(Math.random() * REACTION_ACCUSED.length)];
-
-    const isBody = meeting.reason === 'BODY';
-    const isImp = bot.role === 'IMPOSTOR';
-
-    if (isImp) {
-      const pool = isBody ? IMP_BODY_POOL : IMP_EMERGENCY_POOL;
-      return pool[Math.floor(Math.random() * pool.length)];
-    }
-
-    // Second message can be a reaction/agreement
-    if (msgIndex > 0 && Math.random() < 0.5) {
-      return REACTION_AGREE[Math.floor(Math.random() * REACTION_AGREE.length)];
-    }
-
-    const pool = isBody ? CREW_BODY_POOL[memory.personality] : CREW_EMERGENCY_POOL[memory.personality];
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  // === INTELLIGENT VOTING ===
-  public handleMeetingVoting(bot: GamePlayer): void {
-    if (bot.state === 'DEAD' || bot.state === 'GHOST') return;
-
-    setTimeout(() => {
-      if (this.gameEngine.phase !== 'MEETING') return;
-      const living = Array.from(this.gameEngine.players.values()).filter(p => p.state === 'ALIVE' && p.id !== bot.id);
-      if (living.length === 0) return;
-
-      const memory = this.memories.get(bot.id);
-
-      if (bot.role === 'IMPOSTOR') {
-        // Vote for crewmate, prefer the one most accused in chat
-        const crew = living.filter(p => p.role === 'CREWMATE');
-        const mostAccused = this.findMostAccusedInChat(crew);
-        const target = mostAccused || crew[Math.floor(Math.random() * crew.length)] || living[0];
-        this.gameEngine.castVote(bot.id, target.id);
-      } else {
-        // Crewmate: vote for suspicion target if available
-        if (memory?.suspicionTarget && Math.random() < 0.7) {
-          const suspect = living.find(p => p.name === memory.suspicionTarget);
-          if (suspect) { this.gameEngine.castVote(bot.id, suspect.id); return; }
-        }
-        // Follow chat consensus
-        const mostAccused = this.findMostAccusedInChat(living);
-        if (mostAccused && Math.random() < 0.6) {
-          this.gameEngine.castVote(bot.id, mostAccused.id);
-        } else if (Math.random() < 0.4) {
-          this.gameEngine.castVote(bot.id, 'SKIP');
-        } else {
-          this.gameEngine.castVote(bot.id, living[Math.floor(Math.random() * living.length)].id);
-        }
-      }
-    }, Math.floor(Math.random() * 4000) + 3000);
-  }
-
-  private findMostAccusedInChat(candidates: GamePlayer[]): GamePlayer | null {
-    const mentions: Map<string, number> = new Map();
-    const susWords = ['sus', 'suspeito', 'votar', 'expulsar', 'foi ele', 'foi ela', 'foi o', 'foi a'];
-
-    for (const msg of this.gameEngine.chatMessages) {
-      const lower = msg.text.toLowerCase();
-      if (susWords.some(w => lower.includes(w))) {
-        for (const c of candidates) {
-          if (lower.includes(c.name.toLowerCase())) {
-            mentions.set(c.id, (mentions.get(c.id) || 0) + 1);
-          }
-        }
-      }
-    }
-
-    let best: GamePlayer | null = null;
-    let bestCount = 0;
-    for (const c of candidates) {
-      const count = mentions.get(c.id) || 0;
-      if (count > bestCount) { best = c; bestCount = count; }
-    }
-    return best;
-  }
-
-  private moveTowards(bot: GamePlayer, target: Vector2D, dt: number): void {
-    const memory = this.memories.get(bot.id);
-    if (!memory) return;
-
-    // Recalculate path if target moved or path empty
-    if (!memory.moveTarget || this.dist(memory.moveTarget, target) > 30 || memory.currentPath.length === 0) {
-      memory.moveTarget = target;
-      memory.currentPath = findAStarPath({ x: bot.x, y: bot.y }, target);
-      memory.pathIndex = 0;
-    }
-
-    const currentWaypoint = memory.currentPath[memory.pathIndex] || target;
-    const dx = currentWaypoint.x - bot.x;
-    const dy = currentWaypoint.y - bot.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < 25) {
-      if (memory.pathIndex < memory.currentPath.length - 1) {
-        memory.pathIndex++;
-      } else {
-        bot.vx = 0;
-        bot.vy = 0;
-        return;
-      }
-    }
-
-    const speed = 160 * this.gameEngine.settings.playerSpeed;
-    const stepDx = currentWaypoint.x - bot.x;
-    const stepDy = currentWaypoint.y - bot.y;
-    const stepDist = Math.sqrt(stepDx * stepDx + stepDy * stepDy) || 1;
-
-    bot.vx = (stepDx / stepDist) * speed;
-    bot.vy = (stepDy / stepDist) * speed;
-    bot.facing = stepDx < 0 ? 'LEFT' : 'RIGHT';
-    bot.x = Math.max(30, Math.min(MAP_BOUNDS.width - 30, bot.x + bot.vx * dt));
-    bot.y = Math.max(30, Math.min(MAP_BOUNDS.height - 30, bot.y + bot.vy * dt));
-  }
-
-  private updateVisionMemory(bot: GamePlayer, memory: BotMemory): void {
-    for (const p of this.gameEngine.players.values()) {
-      if (p.id !== bot.id && p.state === 'ALIVE' && !p.inVent && this.dist(bot, p) < 280) {
-        memory.seenPlayers.set(p.id, { name: p.name, room: memory.currentRoomName, time: Date.now() });
-      }
-    }
-  }
-
-  private dist(a: Vector2D, b: Vector2D): number {
-    return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+    return hash;
   }
 }

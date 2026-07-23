@@ -13,10 +13,11 @@ import {
   TaskType,
   SabotageType
 } from '../shared/types';
-import { TASK_DEFINITIONS, SPAWN_POINTS, EMERGENCY_BUTTON_POS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
+import { TASK_DEFINITIONS, SPAWN_POINTS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
 import { TICK_RATE, KILL_DISTANCES } from '../shared/constants';
 import { clampPosition, hasLineOfSight } from './mapCollision';
 import { BotEngine } from './botEngine';
+import { BotAIProvider } from './geminiBotAI';
 import { RoomPlayer } from './roomManager';
 import { sanitizeChatMessage } from './chatFilter';
 import { recordGameStats } from './db';
@@ -40,17 +41,19 @@ export class GameEngine {
   private tickInterval: NodeJS.Timeout | null = null;
   private onStateUpdate: () => void;
   private onGameOver: (winner: 'CREWMATES' | 'IMPOSTORS', reason: string) => void;
+  private lastMoveAt: Map<string, number> = new Map();
 
   constructor(
     roomCode: string, 
     settings: GameSettings, 
     roomPlayers: Map<string, RoomPlayer>,
     onStateUpdate: () => void,
-    onGameOver: (winner: 'CREWMATES' | 'IMPOSTORS', reason: string) => void
+    onGameOver: (winner: 'CREWMATES' | 'IMPOSTORS', reason: string) => void,
+    botAI?: BotAIProvider
   ) {
     this.roomCode = roomCode;
     this.settings = settings;
-    this.botEngine = new BotEngine(this);
+    this.botEngine = new BotEngine(this, botAI);
     this.onStateUpdate = onStateUpdate;
     this.onGameOver = onGameOver;
 
@@ -107,6 +110,7 @@ export class GameEngine {
       };
 
       this.players.set(p.id, gamePlayer);
+      this.lastMoveAt.set(p.id, Date.now());
       if (p.isBot) {
         this.botEngine.initBot(p.id);
       }
@@ -194,10 +198,26 @@ export class GameEngine {
 
     if (speed > maxSpeed * 1.5) return; // Reject clearly hacked speeds
 
-    // Validate position: client sends predicted position, server validates with wall collision
+    const now = Date.now();
+    const elapsed = Math.min(0.25, Math.max(0, (now - (this.lastMoveAt.get(playerId) ?? now)) / 1000));
+    if (elapsed < 0.01) return;
+    this.lastMoveAt.set(playerId, now);
+
+    // Limit displacement independently from the velocity claimed by the
+    // client, then sweep the complete path against walls.
     const clampedX = Math.max(50, Math.min(MAP_BOUNDS.width - 50, x));
     const clampedY = Math.max(50, Math.min(MAP_BOUNDS.height - 50, y));
-    const targetPos = { x: clampedX, y: clampedY };
+    const requestedDx = clampedX - player.x;
+    const requestedDy = clampedY - player.y;
+    const requestedDistance = Math.hypot(requestedDx, requestedDy);
+    const maxDisplacement = maxSpeed * elapsed + 20;
+    const displacementScale = requestedDistance > maxDisplacement
+      ? maxDisplacement / requestedDistance
+      : 1;
+    const targetPos = {
+      x: player.x + requestedDx * displacementScale,
+      y: player.y + requestedDy * displacementScale
+    };
     const clamped = clampPosition({ x: player.x, y: player.y }, targetPos);
 
     player.x = clamped.x;
@@ -258,7 +278,7 @@ export class GameEngine {
     if (reporter.state !== 'ALIVE' || this.phase !== 'PLAYING') return false;
 
     const dist = Math.sqrt(Math.pow(reporter.x - body.x, 2) + Math.pow(reporter.y - body.y, 2));
-    if (dist > 150) return false;
+    if (dist > 150 || !hasLineOfSight(reporter, body)) return false;
 
     body.reported = true;
     this.bodies = this.bodies.filter(b => b.id !== bodyId); // Remove reported body from floor
@@ -267,19 +287,7 @@ export class GameEngine {
     return true;
   }
 
-  public callEmergencyMeeting(callerId: string): boolean {
-    const caller = this.players.get(callerId);
-    if (!caller || caller.state !== 'ALIVE' || this.phase !== 'PLAYING') return false;
-    if (this.sabotage.activeType === 'REACTOR' || this.sabotage.activeType === 'O2') return false; // Block during critical sabotages
-
-    const dist = Math.sqrt(Math.pow(caller.x - EMERGENCY_BUTTON_POS.x, 2) + Math.pow(caller.y - EMERGENCY_BUTTON_POS.y, 2));
-    if (dist > 100) return false;
-
-    this.startMeeting(caller, 'EMERGENCY', null);
-    return true;
-  }
-
-  private startMeeting(caller: GamePlayer, reason: 'BODY' | 'EMERGENCY', bodyId: string | null): void {
+  private startMeeting(caller: GamePlayer, reason: 'BODY', bodyId: string): void {
     this.phase = 'MEETING';
     
     // Teleport all living players back to cafeteria spawn
@@ -315,7 +323,7 @@ export class GameEngine {
       senderId: 'SYSTEM',
       senderName: 'SISTEMA',
       senderColor: '#F59E0B',
-      text: reason === 'BODY' ? `🚨 Corpo denunciado por ${caller.name}!` : `🔔 Reunião de emergência convocada por ${caller.name}!`,
+      text: `🚨 Corpo denunciado por ${caller.name}!`,
       timestamp: Date.now(),
       isGhostOnly: false,
       isSystem: true
@@ -332,6 +340,10 @@ export class GameEngine {
     const voter = this.players.get(voterId);
     if (!voter || voter.state !== 'ALIVE' || !this.meetingState) return false;
     if (this.meetingState.hasVoted[voterId]) return false; // Duplicate vote prevention
+    if (targetId !== 'SKIP') {
+      const target = this.players.get(targetId);
+      if (!target || target.state !== 'ALIVE') return false;
+    }
 
     this.meetingState.votes[voterId] = targetId;
     this.meetingState.hasVoted[voterId] = true;
@@ -402,10 +414,18 @@ export class GameEngine {
 
   public completeTask(playerId: string, taskId: string): boolean {
     const player = this.players.get(playerId);
-    if (!player) return false;
+    if (!player || player.role !== 'CREWMATE' || player.state !== 'ALIVE' || this.phase !== 'PLAYING') {
+      return false;
+    }
 
     const task = player.tasks.find(t => t.id === taskId);
     if (!task || task.completed) return false;
+    if (
+      Math.hypot(player.x - task.x, player.y - task.y) > 120 ||
+      !hasLineOfSight(player, task)
+    ) {
+      return false;
+    }
 
     task.completed = true;
     recordGameStats(playerId, { tasks: 1 });

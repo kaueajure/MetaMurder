@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlayerTask } from '../../shared/types';
 import { soundEngine } from '../audio/soundEffects';
 
@@ -91,16 +91,22 @@ const WiringMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) =>
 const KeypadMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [code] = useState(() => Math.floor(10000 + Math.random() * 90000).toString());
   const [input, setInput] = useState('');
+  const [invalid, setInvalid] = useState(false);
 
   const handlePress = (num: string) => {
     soundEngine.playButtonClick();
-    const next = input + num;
-    setInput(next);
-    if (next === code) {
+    setInvalid(false);
+    setInput(current => current.length < 5 ? current + num : current);
+  };
+
+  const submitCode = () => {
+    soundEngine.playButtonClick();
+    if (input === code) {
       soundEngine.playTaskComplete();
       onComplete();
-    } else if (next.length >= 5) {
-      setTimeout(() => setInput(''), 300);
+    } else {
+      setInvalid(true);
+      setInput('');
     }
   };
 
@@ -108,14 +114,25 @@ const KeypadMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) =>
     <div className="py-4 text-center">
       <div className="bg-slate-950 p-4 rounded-xl mb-4 border border-slate-800">
         <div className="text-xs text-slate-500 mb-1">CÓDIGO REQUERIDO: <span className="font-mono text-cyan-400">{code}</span></div>
-        <div className="font-mono text-3xl text-emerald-400 tracking-widest h-10">{input || '_____'}</div>
+        <div className={`font-mono text-3xl tracking-widest h-10 ${invalid ? 'text-rose-400' : 'text-emerald-400'}`}>
+          {invalid ? 'ERRO' : input.padEnd(5, '_')}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
         {['1','2','3','4','5','6','7','8','9','C','0','✓'].map(btn => (
           <button
             key={btn}
-            onClick={() => btn === 'C' ? setInput('') : btn === '✓' ? null : handlePress(btn)}
+            onClick={() => {
+              if (btn === 'C') {
+                setInput('');
+                setInvalid(false);
+              } else if (btn === '✓') {
+                submitCode();
+              } else {
+                handlePress(btn);
+              }
+            }}
             className="py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold text-lg active:scale-95 border border-slate-700"
           >
             {btn}
@@ -180,22 +197,23 @@ const CalibrateMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete })
 const DownloadMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [progress, setProgress] = useState(0);
   const [downloading, setDownloading] = useState(false);
+  const completedRef = useRef(false);
 
   useEffect(() => {
-    if (!downloading || progress >= 100) return;
+    if (!downloading || completedRef.current) return;
+    let currentProgress = 0;
     const timer = setInterval(() => {
-      setProgress(p => {
-        if (p >= 100) {
-          clearInterval(timer);
-          soundEngine.playTaskComplete();
-          onComplete();
-          return 100;
-        }
-        return p + 5;
-      });
+      currentProgress = Math.min(100, currentProgress + 5);
+      setProgress(currentProgress);
+      if (currentProgress === 100) {
+        clearInterval(timer);
+        completedRef.current = true;
+        soundEngine.playTaskComplete();
+        onComplete();
+      }
     }, 150);
     return () => clearInterval(timer);
-  }, [downloading, progress, onComplete]);
+  }, [downloading, onComplete]);
 
   return (
     <div className="py-6 text-center">
@@ -228,18 +246,37 @@ const DownloadMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) 
 const SimonMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [sequence] = useState(() => Array.from({ length: 4 }, () => Math.floor(Math.random() * 4)));
   const [playerInput, setPlayerInput] = useState<number[]>([]);
+  const [showingSequence, setShowingSequence] = useState(true);
+  const [activePad, setActivePad] = useState<number | null>(null);
+  const [replayKey, setReplayKey] = useState(0);
   const colors = ['#EF4444', '#3B82F6', '#EAB308', '#10B981'];
 
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    setShowingSequence(true);
+    setActivePad(null);
+
+    sequence.forEach((pad, index) => {
+      timers.push(setTimeout(() => setActivePad(pad), 400 + index * 700));
+      timers.push(setTimeout(() => setActivePad(null), 850 + index * 700));
+    });
+    timers.push(setTimeout(() => setShowingSequence(false), 500 + sequence.length * 700));
+
+    return () => timers.forEach(clearTimeout);
+  }, [sequence, replayKey]);
+
   const handleClick = (idx: number) => {
+    if (showingSequence) return;
     soundEngine.playButtonClick();
     const next = [...playerInput, idx];
-    setPlayerInput(next);
 
     if (next[next.length - 1] !== sequence[next.length - 1]) {
-      setPlayerInput([]); // Reset on mistake
+      setPlayerInput([]);
+      setReplayKey(key => key + 1);
       return;
     }
 
+    setPlayerInput(next);
     if (next.length === sequence.length) {
       soundEngine.playTaskComplete();
       onComplete();
@@ -248,17 +285,33 @@ const SimonMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) => 
 
   return (
     <div className="py-4 text-center">
-      <p className="text-xs text-slate-400 mb-4">Repita a sequência de luzes:</p>
+      <p className="text-xs text-slate-400 mb-4">
+        {showingSequence ? 'Observe a sequência de luzes...' : `Repita a sequência (${playerInput.length}/${sequence.length})`}
+      </p>
       <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto mb-4">
         {colors.map((c, idx) => (
           <button
             key={idx}
+            disabled={showingSequence}
             onClick={() => handleClick(idx)}
-            className="h-24 rounded-2xl border-2 border-white/20 active:scale-95 shadow-lg"
-            style={{ backgroundColor: c }}
+            className={`h-24 rounded-2xl border-4 active:scale-95 shadow-lg transition-all ${
+              activePad === idx ? 'border-white scale-105 brightness-150' : 'border-white/20 brightness-75'
+            }`}
+            style={{ backgroundColor: c, boxShadow: activePad === idx ? `0 0 30px ${c}` : undefined }}
           />
         ))}
       </div>
+      {!showingSequence && (
+        <button
+          onClick={() => {
+            setPlayerInput([]);
+            setReplayKey(key => key + 1);
+          }}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs text-slate-300"
+        >
+          MOSTRAR NOVAMENTE
+        </button>
+      )}
     </div>
   );
 };
@@ -266,19 +319,39 @@ const SimonMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) => 
 // 6. REFILL MINI GAME
 const RefillMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const [fill, setFill] = useState(0);
+  const fillIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const completedRef = useRef(false);
 
-  const handleHold = () => {
-    soundEngine.playTaskProgress();
+  const addFuel = () => {
     setFill(f => {
-      const next = f + 8;
+      const next = Math.min(100, f + 4);
       if (next >= 100) {
-        soundEngine.playTaskComplete();
-        onComplete();
+        if (!completedRef.current) {
+          completedRef.current = true;
+          soundEngine.playTaskComplete();
+          onComplete();
+        }
         return 100;
       }
       return next;
     });
   };
+
+  const startFilling = () => {
+    if (fillIntervalRef.current || completedRef.current) return;
+    soundEngine.playTaskProgress();
+    addFuel();
+    fillIntervalRef.current = setInterval(addFuel, 70);
+  };
+
+  const stopFilling = () => {
+    if (fillIntervalRef.current) {
+      clearInterval(fillIntervalRef.current);
+      fillIntervalRef.current = null;
+    }
+  };
+
+  useEffect(() => stopFilling, []);
 
   return (
     <div className="py-6 text-center">
@@ -290,10 +363,13 @@ const RefillMiniGame: React.FC<{ onComplete: () => void }> = ({ onComplete }) =>
       </div>
 
       <button
-        onClick={handleHold}
+        onPointerDown={startFilling}
+        onPointerUp={stopFilling}
+        onPointerLeave={stopFilling}
+        onPointerCancel={stopFilling}
         className="w-full py-4 bg-amber-600 hover:bg-amber-500 font-bold rounded-xl text-white shadow-lg active:scale-95"
       >
-        PRESSIONAR PARA ABASTECER
+        SEGURE PARA ABASTECER
       </button>
     </div>
   );

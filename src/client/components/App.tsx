@@ -187,7 +187,18 @@ export const App: React.FC = () => {
         {showCustomize && (
           <CustomizeView
             initial={{ color: profile.equippedColor, hatId: profile.equippedHat, skinId: profile.equippedSkin }}
-            onSave={(custom) => {
+            onSave={async (custom) => {
+              const response = await fetch('/api/profile/customize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: profile.id,
+                  color: custom.color,
+                  hatId: custom.hatId,
+                  skinId: custom.skinId
+                })
+              });
+              if (!response.ok) throw new Error('Customization save failed');
               socket.emit(SOCKET_EVENTS.C2S_UPDATE_CUSTOMIZATION, custom);
               setProfile({
                 ...profile,

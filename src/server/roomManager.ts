@@ -38,7 +38,7 @@ export class Room {
     // Ensure unique color assignment
     const usedColors = new Set(Array.from(this.players.values()).filter(p => p.id !== player.id).map(p => p.color));
     const availableColor = PLAYER_COLORS.find(c => !usedColors.has(c.id));
-    if (availableColor) {
+    if (usedColors.has(player.color) && availableColor) {
       player.color = availableColor.id;
     }
 
@@ -128,6 +128,16 @@ export class Room {
       code: this.code,
       name: this.name,
       hostName: host ? host.name : 'Ninguém',
+      players: Array.from(this.players.values()).map(player => ({
+        id: player.id,
+        name: player.name,
+        isBot: player.isBot,
+        color: player.color,
+        hatId: player.hatId,
+        skinId: player.skinId,
+        isHost: player.isHost,
+        isReady: player.isReady
+      })),
       playerCount: this.players.size,
       maxPlayers: this.settings.maxPlayers,
       impostorCount: this.settings.impostorCount,

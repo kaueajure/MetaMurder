@@ -32,10 +32,10 @@ export const MeetingOverlay: React.FC<Props> = ({ meeting, players, self, chatMe
       <div className="flex justify-between items-center mb-6 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl">
         <div>
           <h2 className="text-2xl font-black text-rose-500 tracking-wider flex items-center gap-2">
-            🚨 REUNIÃO DE EMERGÊNCIA
+            🚨 CORPO RELATADO
           </h2>
           <p className="text-xs text-slate-400">
-            Convocada por: <span className="text-amber-400 font-bold">{meeting.callerName}</span>
+            Relatado por: <span className="text-amber-400 font-bold">{meeting.callerName}</span>
           </p>
         </div>
 

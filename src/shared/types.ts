@@ -133,7 +133,7 @@ export interface MeetingState {
   callerId: string;
   callerName: string;
   bodyId: string | null; // null if emergency meeting
-  reason: 'BODY' | 'EMERGENCY';
+  reason: 'BODY';
   phase: 'DISCUSSION' | 'VOTING' | 'RESULT';
   timer: number; // remaining seconds
   votes: { [voterId: string]: string }; // voterId -> targetPlayerId (or 'SKIP')
@@ -176,6 +176,16 @@ export interface RoomSummary {
   code: string;
   name: string;
   hostName: string;
+  players: Array<{
+    id: string;
+    name: string;
+    isBot: boolean;
+    color: string;
+    hatId: string;
+    skinId: string;
+    isHost: boolean;
+    isReady: boolean;
+  }>;
   playerCount: number;
   maxPlayers: number;
   impostorCount: number;

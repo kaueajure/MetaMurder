@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getOrCreateGuest, getUserProfile, updateUserCustomization } from './db';
 import { roomManager } from './roomManager';
+import { HATS, PLAYER_COLORS, SKINS } from '../shared/constants';
 
 export const router = Router();
 
@@ -31,6 +32,15 @@ router.get('/profile/:id', async (req, res) => {
 router.post('/profile/customize', async (req, res) => {
   try {
     const { userId, color, hatId, skinId } = req.body;
+    const valid =
+      typeof userId === 'string' &&
+      PLAYER_COLORS.some(candidate => candidate.id === color) &&
+      HATS.some(candidate => candidate.id === hatId) &&
+      SKINS.some(candidate => candidate.id === skinId);
+    if (!valid) {
+      res.status(400).json({ error: 'Personalização inválida.' });
+      return;
+    }
     await updateUserCustomization(userId, color, hatId, skinId);
     res.json({ success: true });
   } catch (err: any) {

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { RoomSummary, UserProfile } from '../../shared/types';
 import { soundEngine } from '../audio/soundEffects';
+import { CharacterPreview } from './CharacterPreview';
+import stationDeck from '../assets/station-command-deck.webp';
 
 interface Props {
   profile: UserProfile;
@@ -23,133 +25,167 @@ export const MainMenu: React.FC<Props> = ({
 }) => {
   const [joinCode, setJoinCode] = useState('');
 
-  const handleJoinByCode = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleJoinByCode = (event: React.FormEvent) => {
+    event.preventDefault();
     if (!joinCode.trim()) return;
     soundEngine.playButtonClick();
     onJoinRoom(joinCode.trim());
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 relative overflow-hidden">
-      {/* Background Cyber Grid effect */}
-      <div className="absolute inset-0 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none" />
+    <main className="relative min-h-screen overflow-y-auto bg-[#02050b] text-white">
+      <div
+        className="fixed inset-0 bg-cover bg-center scale-[1.02]"
+        style={{ backgroundImage: `url(${stationDeck})` }}
+      />
+      <div className="fixed inset-0 bg-[linear-gradient(90deg,rgba(2,5,11,.94)_0%,rgba(2,5,11,.58)_48%,rgba(2,5,11,.78)_100%)]" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_36%,transparent_0%,rgba(2,5,11,.28)_52%,rgba(2,5,11,.86)_100%)]" />
 
-      {/* Top Header */}
-      <div className="flex justify-between items-center z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-cyan-500 border-2 border-white/20 shadow-lg shadow-cyan-500/50 flex items-center justify-center font-black text-xl">
-            M
-          </div>
-          <h1 className="text-2xl font-black tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-indigo-400">
-            METAMURDER
-          </h1>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => { soundEngine.playButtonClick(); onOpenProfile(); }}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-bold flex items-center gap-2"
-          >
-            👤 <span className="text-cyan-400">{profile.username}</span>
-          </button>
-          <button
-            onClick={() => { soundEngine.playButtonClick(); onOpenSettings(); }}
-            className="w-10 h-10 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-xs font-bold flex items-center justify-center"
-          >
-            ⚙️
-          </button>
-        </div>
-      </div>
-
-      {/* Main Center Hero Actions */}
-      <div className="max-w-4xl mx-auto w-full my-auto z-10 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Quick Play & Create Room */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 backdrop-blur-md shadow-2xl flex flex-col justify-between">
+      <div className="relative z-10 min-h-screen flex flex-col px-4 md:px-8 lg:px-12">
+        <header className="h-20 flex items-center justify-between border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="relative w-11 h-11 rounded-full border border-cyan-200/40 bg-cyan-400/10 shadow-[0_0_30px_rgba(34,211,238,.25)] flex items-center justify-center">
+              <span className="absolute inset-1 rounded-full border border-cyan-300/20" />
+              <span className="font-black text-cyan-200">M</span>
+            </div>
             <div>
-              <h2 className="text-3xl font-black mb-2 text-white">CRIAR PARTIDA</h2>
-              <p className="text-xs text-slate-400 mb-6">Crie uma nova sala para jogar com amigos ou bots personalizáveis.</p>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => { soundEngine.playButtonClick(); onCreateRoom(false); }}
-                className="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 font-black text-lg rounded-2xl shadow-xl transition-all active:scale-98 border border-cyan-400/30"
-              >
-                CRIAR SALA PÚBLICA
-              </button>
-              <button
-                onClick={() => { soundEngine.playButtonClick(); onCreateRoom(true); }}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 font-bold text-xs rounded-xl border border-slate-700 text-slate-300"
-              >
-                CRIAR SALA PRIVADA
-              </button>
+              <p className="text-[9px] uppercase tracking-[.42em] text-cyan-200/55 font-bold">Orbital station zero</p>
+              <h1 className="text-xl font-black tracking-[.12em] text-white">METAMURDER</h1>
             </div>
           </div>
 
-          {/* Join by Code */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 backdrop-blur-md shadow-2xl flex flex-col justify-between">
-            <div>
-              <h2 className="text-3xl font-black mb-2 text-white">ENTRAR COM CÓDIGO</h2>
-              <p className="text-xs text-slate-400 mb-6">Insira o código único de 6 caracteres fornecido pelo líder da sala.</p>
-            </div>
-
-            <form onSubmit={handleJoinByCode} className="space-y-3">
-              <input
-                type="text"
-                value={joinCode}
-                onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                placeholder="EX: ABC123"
-                maxLength={6}
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center text-2xl font-mono font-bold tracking-widest text-cyan-400 focus:outline-none focus:border-cyan-500"
-              />
-              <button
-                type="submit"
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 font-black text-lg rounded-2xl shadow-xl transition-all active:scale-98 border border-emerald-400/30"
-              >
-                ENTRAR NA SALA
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Public Room Browser List */}
-        <div className="mt-8 bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-md">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-white">SALAS PÚBLICAS DISPONÍVEIS</h3>
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => { soundEngine.playButtonClick(); onRefreshRooms(); }}
-              className="text-xs text-cyan-400 hover:underline font-bold"
+              onClick={() => { soundEngine.playButtonClick(); onOpenProfile(); }}
+              className="h-10 px-4 rounded-full border border-white/10 bg-black/30 backdrop-blur-md text-xs font-bold hover:bg-white/10 transition-colors"
             >
-              🔄 ATUALIZAR
+              <span className="text-slate-400 mr-2">TRIPULANTE</span>
+              <span className="text-cyan-200">{profile.username}</span>
+            </button>
+            <button
+              onClick={() => { soundEngine.playButtonClick(); onOpenSettings(); }}
+              aria-label="Configurações"
+              className="w-10 h-10 rounded-full border border-white/10 bg-black/30 backdrop-blur-md hover:bg-white/10 transition-colors"
+            >
+              ⚙
             </button>
           </div>
+        </header>
 
-          {publicRooms.length === 0 ? (
-            <div className="text-center py-8 text-xs font-mono text-slate-500">
-              Nenhuma sala pública disponível no momento. Crie uma nova sala acima!
+        <section className="flex-1 w-full max-w-7xl mx-auto grid lg:grid-cols-[.8fr_1.2fr] items-center gap-4 lg:gap-14 py-7">
+          <div className="relative min-h-[360px] lg:min-h-[620px] hidden md:block">
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-[8%] w-[65%] h-[15%] rounded-[50%] border border-cyan-200/20 bg-cyan-300/5 [transform:translateX(-50%)_perspective(500px)_rotateX(66deg)] shadow-[0_0_50px_rgba(34,211,238,.15)]" />
+            <div className="absolute inset-0">
+              <CharacterPreview
+                customization={{
+                  color: profile.equippedColor,
+                  hatId: profile.equippedHat,
+                  skinId: profile.equippedSkin
+                }}
+              />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-48 overflow-y-auto">
-              {publicRooms.map(room => (
-                <div key={room.code} className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex justify-between items-center">
+            <div className="absolute left-3 bottom-8 max-w-xs">
+              <p className="text-[10px] uppercase tracking-[.35em] text-amber-300/70 font-bold">Sinal desconhecido detectado</p>
+              <h2 className="mt-2 text-4xl lg:text-5xl font-black leading-[.92] tracking-tight">
+                DESCUBRA<br /><span className="text-cyan-200">QUEM ESTÁ</span><br />MENTINDO.
+              </h2>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="md:hidden mb-6">
+              <p className="text-[10px] uppercase tracking-[.35em] text-amber-300/70 font-bold">Sinal desconhecido detectado</p>
+              <h2 className="mt-2 text-4xl font-black leading-none">DESCUBRA QUEM ESTÁ <span className="text-cyan-200">MENTINDO.</span></h2>
+            </div>
+
+            <div className="relative overflow-hidden border-y border-white/10 bg-black/35 backdrop-blur-xl">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-300 shadow-[0_0_18px_#22d3ee]" />
+              <div className="p-6 md:p-8">
+                <div className="flex items-center justify-between gap-4 mb-6">
                   <div>
-                    <div className="font-bold text-xs text-white">{room.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{room.playerCount}/{room.maxPlayers} Jogadores</div>
+                    <p className="text-[9px] uppercase tracking-[.35em] text-cyan-200/60 font-bold">Terminal de lançamento</p>
+                    <h3 className="text-2xl font-black">Iniciar operação</h3>
                   </div>
+                  <span className="text-[10px] text-emerald-300 font-mono flex items-center gap-2">
+                    <i className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                    SERVIDOR ONLINE
+                  </span>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3">
                   <button
-                    onClick={() => { soundEngine.playButtonClick(); onJoinRoom(room.code); }}
-                    className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl"
+                    onClick={() => { soundEngine.playButtonClick(); onCreateRoom(false); }}
+                    className="group relative min-h-28 p-5 text-left overflow-hidden border border-cyan-200/30 bg-cyan-400/10 hover:bg-cyan-300/20 transition-all"
                   >
-                    ENTRAR
+                    <span className="absolute right-3 top-2 text-5xl text-cyan-200/10 group-hover:text-cyan-200/20 transition-colors">01</span>
+                    <span className="block text-[10px] text-cyan-200 uppercase tracking-widest">Partida aberta</span>
+                    <strong className="block mt-5 text-lg">CRIAR SALA PÚBLICA →</strong>
+                  </button>
+                  <button
+                    onClick={() => { soundEngine.playButtonClick(); onCreateRoom(true); }}
+                    className="group relative min-h-28 p-5 text-left overflow-hidden border border-white/10 bg-white/[.035] hover:bg-white/[.08] transition-all"
+                  >
+                    <span className="absolute right-3 top-2 text-5xl text-white/5 group-hover:text-white/10">02</span>
+                    <span className="block text-[10px] text-slate-400 uppercase tracking-widest">Somente convidados</span>
+                    <strong className="block mt-5 text-lg">CRIAR SALA PRIVADA →</strong>
                   </button>
                 </div>
-              ))}
+              </div>
             </div>
-          )}
-        </div>
+
+            <form onSubmit={handleJoinByCode} className="flex border-y border-white/10 bg-black/35 backdrop-blur-xl">
+              <div className="flex-1 p-4 md:p-5">
+                <label className="block text-[9px] uppercase tracking-[.3em] text-slate-500 font-bold mb-2">Código de acesso</label>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={event => setJoinCode(event.target.value.toUpperCase())}
+                  placeholder="ABC123"
+                  maxLength={6}
+                  className="w-full bg-transparent outline-none font-mono text-2xl tracking-[.35em] text-white placeholder:text-white/15"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-6 md:px-10 bg-amber-400 text-slate-950 font-black hover:bg-amber-300 transition-colors"
+              >
+                ENTRAR
+              </button>
+            </form>
+
+            <div className="border-y border-white/10 bg-black/30 backdrop-blur-lg">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-white/8">
+                <p className="text-[10px] uppercase tracking-[.25em] text-slate-400 font-bold">
+                  Transmissões disponíveis · {publicRooms.length}
+                </p>
+                <button
+                  onClick={() => { soundEngine.playButtonClick(); onRefreshRooms(); }}
+                  className="text-[10px] text-cyan-200 font-bold hover:text-white"
+                >
+                  ATUALIZAR ↻
+                </button>
+              </div>
+              <div className="max-h-36 overflow-y-auto">
+                {publicRooms.length === 0 ? (
+                  <p className="px-5 py-6 text-xs text-slate-500">Nenhum sinal público encontrado.</p>
+                ) : publicRooms.map(room => (
+                  <button
+                    key={room.code}
+                    onClick={() => { soundEngine.playButtonClick(); onJoinRoom(room.code); }}
+                    className="w-full flex items-center justify-between px-5 py-3 border-b border-white/5 hover:bg-white/5 text-left transition-colors"
+                  >
+                    <span>
+                      <strong className="block text-xs text-white">{room.name}</strong>
+                      <small className="text-[10px] text-slate-500">{room.playerCount}/{room.maxPlayers} tripulantes</small>
+                    </span>
+                    <span className="font-mono text-xs text-cyan-200">{room.code} →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 };

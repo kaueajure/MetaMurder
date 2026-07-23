@@ -227,14 +227,6 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  socket.on(SOCKET_EVENTS.C2S_CALL_MEETING, () => {
-    if (!currentRoomCode || !userId) return;
-    const room = roomManager.getRoom(currentRoomCode);
-    if (room?.gameEngine) {
-      room.gameEngine.callEmergencyMeeting(userId);
-    }
-  });
-
   socket.on(SOCKET_EVENTS.C2S_CAST_VOTE, (data: { targetId: string }) => {
     if (!currentRoomCode || !userId) return;
     const room = roomManager.getRoom(currentRoomCode);
@@ -443,6 +435,5 @@ if (typeof rawPort === 'string' && (rawPort.startsWith('/') || rawPort.startsWit
     console.log(`🚀 MetaMurder Server running on port ${portNum}`);
   });
 }
-
 
 
