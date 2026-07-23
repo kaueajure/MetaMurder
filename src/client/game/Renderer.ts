@@ -347,23 +347,25 @@ export class Renderer {
     const canvasWidth = this.canvas.width;
     const canvasHeight = this.canvas.height;
 
-    // Create a massive darkness overlay covering everything outside the camera
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.98)';
-    ctx.fillRect(self.x - canvasWidth, self.y - canvasHeight, canvasWidth * 2, canvasHeight * 2);
+    ctx.save();
+    ctx.fillStyle = 'rgba(2, 6, 23, 0.94)';
 
-    // Erase the vision circle using composite operation
-    ctx.globalCompositeOperation = 'destination-out';
-    
-    const grad = ctx.createRadialGradient(self.x, self.y, visionRadius * 0.4, self.x, self.y, visionRadius);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    
+    // 1. Draw solid dark mask with vision cutout using evenodd rule
+    ctx.beginPath();
+    ctx.rect(self.x - canvasWidth, self.y - canvasHeight, canvasWidth * 2, canvasHeight * 2);
+    ctx.arc(self.x, self.y, visionRadius, 0, Math.PI * 2, true);
+    ctx.fill('evenodd');
+
+    // 2. Draw smooth radial gradient vignette along vision edge
+    const grad = ctx.createRadialGradient(self.x, self.y, visionRadius * 0.7, self.x, self.y, visionRadius);
+    grad.addColorStop(0, 'rgba(2, 6, 23, 0)');
+    grad.addColorStop(1, 'rgba(2, 6, 23, 0.94)');
+
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(self.x, self.y, visionRadius, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Reset composite operation
-    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.restore();
   }
 }

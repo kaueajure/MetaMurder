@@ -12,18 +12,46 @@ export class InputHandler {
   private keys: { [key: string]: boolean } = {};
   public joystickDir: { x: number; y: number } = { x: 0, y: 0 };
 
-  constructor() {
-    window.addEventListener('keydown', (e) => {
-      // Prevent browser scroll on arrows/space
-      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) {
-        e.preventDefault();
-      }
-      this.keys[e.key.toLowerCase()] = true;
-    }, { passive: false });
+  private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (this.isEditableTarget(event.target)) {
+      return;
+    }
 
-    window.addEventListener('keyup', (e) => {
-      this.keys[e.key.toLowerCase()] = false;
-    });
+    const key = event.key.toLowerCase();
+
+    // Prevent browser scroll only while the keyboard is controlling the game.
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
+      event.preventDefault();
+    }
+    this.keys[key] = true;
+  };
+
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    // Always release the key, including when focus moved to the chat between
+    // keydown and keyup, so movement cannot get stuck.
+    this.keys[event.key.toLowerCase()] = false;
+  };
+
+  constructor() {
+    window.addEventListener('keydown', this.handleKeyDown, { passive: false });
+    window.addEventListener('keyup', this.handleKeyUp);
+  }
+
+  public destroy(): void {
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    this.keys = {};
+    this.joystickDir = { x: 0, y: 0 };
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+
+    const tagName = target.tagName;
+    return tagName === 'INPUT' ||
+      tagName === 'TEXTAREA' ||
+      tagName === 'SELECT' ||
+      target.isContentEditable;
   }
 
   public getInputState(): InputState {

@@ -68,7 +68,12 @@ export const GameView: React.FC<Props> = ({
       }
     };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      inputHandlerRef.current?.destroy();
+      inputHandlerRef.current = null;
+      rendererRef.current = null;
+    };
   }, []);
 
   // Main 60 FPS Render & Movement & Interaction Check Loop

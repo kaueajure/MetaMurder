@@ -480,6 +480,12 @@ export class GameEngine {
     };
 
     this.chatMessages.push(message);
+
+    // Human chat can require an immediate bot reaction (for example, when a
+    // bot is named or accused) instead of waiting for its scheduled dialogue.
+    if (!sender.isBot && !isGhost && this.phase === 'MEETING') {
+      this.botEngine.handleChatMention(sender, cleanText);
+    }
   }
 
   public handlePlayerDisconnect(playerId: string): void {

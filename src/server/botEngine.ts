@@ -115,6 +115,7 @@ interface BotMemory {
   chatCount: number;
   maxChats: number;
   lastChatTime: number;
+  pendingDefense: boolean;
 }
 
 // Gemini AI chat with conversation history for natural dialogue
@@ -284,6 +285,7 @@ export class BotEngine {
       chatCount: 0,
       maxChats: 2 + Math.floor(Math.random() * 2), // 2-3
       lastChatTime: 0,
+      pendingDefense: false,
     });
   }
 
@@ -414,6 +416,51 @@ export class BotEngine {
       const delay = 1500 + (i * 3000) + Math.floor(Math.random() * 2000);
       setTimeout(() => this.sendBotChat(bot, memory, i), delay);
     }
+  }
+
+  /**
+   * React to a human mentioning a living bot during a meeting. This is
+   * triggered by the incoming message instead of waiting for one of the
+   * discussion messages scheduled when the meeting began.
+   */
+  public handleChatMention(sender: GamePlayer, text: string): void {
+    if (!this.gameEngine.meetingState || this.gameEngine.phase !== 'MEETING') return;
+    if (sender.isBot || sender.state !== 'ALIVE') return;
+
+    for (const bot of this.gameEngine.players.values()) {
+      if (!bot.isBot || bot.state !== 'ALIVE' || bot.id === sender.id) continue;
+      if (!this.mentionsPlayer(text, bot.name)) continue;
+
+      const memory = this.memories.get(bot.id);
+      if (!memory || memory.pendingDefense) continue;
+
+      memory.pendingDefense = true;
+      const delay = 450 + Math.floor(Math.random() * 400);
+
+      setTimeout(() => {
+        memory.pendingDefense = false;
+        if (this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState) return;
+        if (bot.state !== 'ALIVE') return;
+
+        const defense = REACTION_ACCUSED[Math.floor(Math.random() * REACTION_ACCUSED.length)];
+        this.gameEngine.sendChatMessage(bot.id, defense);
+      }, delay);
+    }
+  }
+
+  private mentionsPlayer(text: string, playerName: string): boolean {
+    const normalize = (value: string) => value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR');
+
+    const escapedName = normalize(playerName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mentionPattern = new RegExp(
+      `(^|[^\\p{L}\\p{N}_])${escapedName}(?=$|[^\\p{L}\\p{N}_])`,
+      'u'
+    );
+
+    return mentionPattern.test(normalize(text));
   }
 
   private buildSuspicionAndAlibi(bot: GamePlayer, memory: BotMemory): void {
