@@ -21,8 +21,20 @@
 - **Sistema de Reuniões & Votação**:
   - Chat restrito (jogadores mortos só conversam entre si no canal dos fantasmas)
   - Animação de expulsão com confirmação de função configurável
+- **Segurança e Dutos**:
+  - Terminal na Sala Diguinho com cinco câmeras ao vivo e troca de canal
+  - Rede de dutos exclusiva dos assassinos, com entrada por proximidade, rotas conectadas e validação autoritativa
 - **Sintetizador Sonoro Web Audio**: Passos, alarmes, efeitos de morte, botões e músicas gerados proceduralmente via Web Audio API.
 - **Persistência SQLite**: Registro de contas convidadas, estatísticas de jogo e itens cosméticos.
+
+---
+
+## 🎮 Controles
+
+- `WASD` ou setas: movimentar
+- `E` ou `Espaço`: usar tarefa, câmera ou duto próximo
+- `V`: entrar ou sair do duto
+- Terminal de câmeras: `Esc` fecha e as setas trocam o canal
 
 ---
 
@@ -71,7 +83,8 @@ GEMINI_ACTION_INTERVAL_MS=12000
 `GEMINI_API_KEY` habilita as decisões reais dos bots. A IA escolhe falas,
 respostas, votos e objetivos de movimento; colisões, alcance, recargas e alvos
 continuam validados pelo servidor. Sem uma chave válida, os bots mantêm apenas
-movimentação básica para a partida não travar e não simulam falas de IA.
+movimentação e votação de segurança baseadas nas acusações registradas para a
+partida não travar, mas não simulam falas de IA.
 
 ---
 

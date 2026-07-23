@@ -9,6 +9,7 @@ interface Props {
   sabotage: SabotageState;
   nearbyInteractable: string | null;
   canReport: boolean;
+  canVent: boolean;
   onJoystickMove: (dir: { x: number; y: number }) => void;
   onUseInteract: () => void;
   onKill: () => void;
@@ -25,6 +26,7 @@ export const HUD: React.FC<Props> = ({
   sabotage,
   nearbyInteractable,
   canReport,
+  canVent,
   onJoystickMove,
   onUseInteract,
   onKill,
@@ -156,7 +158,7 @@ export const HUD: React.FC<Props> = ({
         {/* Action Buttons */}
         <div className="flex gap-3 pointer-events-auto">
           {/* Report Body Button */}
-          {isAlive && canReport && (
+          {isAlive && !self.inVent && canReport && (
             <button
               onClick={() => { soundEngine.playButtonClick(); onReport(); }}
               className="w-20 h-20 rounded-full bg-[radial-gradient(circle_at_35%_25%,#fcd34d,#d97706_60%,#78350f)] hover:brightness-110 border border-amber-100/70 text-white font-bold flex flex-col items-center justify-center shadow-[0_0_24px_rgba(245,158,11,.35),0_12px_30px_rgba(0,0,0,.45)] active:scale-95 text-xs transition-all"
@@ -167,7 +169,7 @@ export const HUD: React.FC<Props> = ({
           )}
 
           {/* Use / Interact Button */}
-          {canUse && (
+          {canUse && !self.inVent && (
             <button
               disabled={!nearbyInteractable}
               onClick={() => { soundEngine.playButtonClick(); onUseInteract(); }}
@@ -183,7 +185,7 @@ export const HUD: React.FC<Props> = ({
           )}
 
           {/* Impostor Kill Button */}
-          {isImpostor && isAlive && (
+          {isImpostor && isAlive && !self.inVent && (
             <button
               disabled={self.killCooldownRemaining > 0}
               onClick={() => { soundEngine.playButtonClick(); onKill(); }}
@@ -196,6 +198,17 @@ export const HUD: React.FC<Props> = ({
                   {Math.ceil(self.killCooldownRemaining)}s
                 </span>
               )}
+            </button>
+          )}
+
+          {/* Vent button: enter nearby opening or exit the current one. */}
+          {isImpostor && isAlive && canVent && (
+            <button
+              onClick={() => { soundEngine.playButtonClick(); onVent(); }}
+              className="w-20 h-20 rounded-full bg-[radial-gradient(circle_at_35%_25%,#a78bfa,#7c3aed_58%,#2e1065)] hover:brightness-110 border border-violet-200/70 text-white font-bold flex flex-col items-center justify-center shadow-[0_0_24px_rgba(139,92,246,.35),0_12px_30px_rgba(0,0,0,.45)] active:scale-95 text-xs transition-all"
+            >
+              <span className="text-2xl mb-1">🕳️</span>
+              <span className="text-[11px] font-black">{self.inVent ? 'SAIR' : 'DUTO'}</span>
             </button>
           )}
 

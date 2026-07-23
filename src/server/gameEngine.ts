@@ -13,7 +13,7 @@ import {
   TaskType,
   SabotageType
 } from '../shared/types';
-import { TASK_DEFINITIONS, SPAWN_POINTS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
+import { TASK_DEFINITIONS, SPAWN_POINTS, SABOTAGE_NODES, MAP_BOUNDS, VENTS } from '../shared/mapData';
 import { TICK_RATE, KILL_DISTANCES } from '../shared/constants';
 import { clampGhostPosition, clampPosition, hasLineOfSight } from './mapCollision';
 import { BotEngine } from './botEngine';
@@ -176,7 +176,10 @@ export class GameEngine {
             if (p.isBot) this.botEngine.handleMeetingVoting(p);
           });
         } else if (this.meetingState.phase === 'VOTING') {
-          this.finalizeVoting();
+          // If an external AI call is slow or unavailable, every living bot
+          // still casts an evidence-based vote before the timer closes.
+          this.botEngine.ensureBotsHaveVoted();
+          if (this.meetingState?.phase === 'VOTING') this.finalizeVoting();
         } else if (this.meetingState.phase === 'RESULT') {
           this.endMeetingAndResume();
         }
@@ -190,7 +193,7 @@ export class GameEngine {
 
   public handlePlayerMove(playerId: string, x: number, y: number, vx: number, vy: number, facing: 'LEFT' | 'RIGHT'): void {
     const player = this.players.get(playerId);
-    if (!player || this.phase !== 'PLAYING') return;
+    if (!player || player.inVent || this.phase !== 'PLAYING') return;
 
     // Validate speed to prevent speed hacks
     const maxSpeed = 260 * this.settings.playerSpeed;
@@ -236,7 +239,7 @@ export class GameEngine {
     const target = this.players.get(targetId);
 
     if (!killer || !target) return false;
-    if (killer.role !== 'IMPOSTOR' || killer.state !== 'ALIVE') return false;
+    if (killer.role !== 'IMPOSTOR' || killer.state !== 'ALIVE' || killer.inVent) return false;
     if (target.state !== 'ALIVE' || target.role === 'IMPOSTOR') return false;
     if (killer.killCooldownRemaining > 0 || this.phase !== 'PLAYING') return false;
 
@@ -278,7 +281,7 @@ export class GameEngine {
     const body = this.bodies.find(b => b.id === bodyId);
 
     if (!reporter || !body || body.reported) return false;
-    if (reporter.state !== 'ALIVE' || this.phase !== 'PLAYING') return false;
+    if (reporter.state !== 'ALIVE' || reporter.inVent || this.phase !== 'PLAYING') return false;
 
     const dist = Math.sqrt(Math.pow(reporter.x - body.x, 2) + Math.pow(reporter.y - body.y, 2));
     if (dist > 150 || !hasLineOfSight(reporter, body)) return false;
@@ -302,6 +305,7 @@ export class GameEngine {
       p.vx = 0;
       p.vy = 0;
       p.inVent = false;
+      p.currentVentId = null;
       idx++;
     });
 
@@ -341,7 +345,12 @@ export class GameEngine {
 
   public castVote(voterId: string, targetId: string): boolean {
     const voter = this.players.get(voterId);
-    if (!voter || voter.state !== 'ALIVE' || !this.meetingState) return false;
+    if (
+      !voter ||
+      voter.state !== 'ALIVE' ||
+      !this.meetingState ||
+      this.meetingState.phase !== 'VOTING'
+    ) return false;
     if (this.meetingState.hasVoted[voterId]) return false; // Duplicate vote prevention
     if (targetId !== 'SKIP') {
       const target = this.players.get(targetId);
@@ -396,6 +405,11 @@ export class GameEngine {
         this.meetingState.ejectedPlayerId = ejectedId;
         this.meetingState.ejectedPlayerName = ejectedPlayer.name;
         this.meetingState.wasImpostor = ejectedPlayer.role === 'IMPOSTOR';
+        this.botEngine.handleMeetingResult(
+          ejectedId,
+          this.meetingState.wasImpostor,
+          this.meetingState.votes
+        );
 
         // Check victory condition after ejection
         if (ejectedPlayer.role === 'IMPOSTOR') {
@@ -475,10 +489,52 @@ export class GameEngine {
 
   public useVent(impostorId: string, ventId: string): boolean {
     const imp = this.players.get(impostorId);
-    if (!imp || imp.role !== 'IMPOSTOR' || imp.state !== 'ALIVE') return false;
+    if (
+      !imp ||
+      imp.role !== 'IMPOSTOR' ||
+      imp.state !== 'ALIVE' ||
+      this.phase !== 'PLAYING'
+    ) return false;
+    const requestedVent = VENTS.find(vent => vent.id === ventId);
+    if (!requestedVent) return false;
 
-    imp.inVent = !imp.inVent;
-    imp.currentVentId = imp.inVent ? ventId : null;
+    if (!imp.inVent) {
+      const distance = Math.hypot(imp.x - requestedVent.x, imp.y - requestedVent.y);
+      if (distance > 75 || !hasLineOfSight(imp, requestedVent)) return false;
+      imp.x = requestedVent.x;
+      imp.y = requestedVent.y;
+      imp.vx = 0;
+      imp.vy = 0;
+      imp.inVent = true;
+      imp.currentVentId = requestedVent.id;
+      return true;
+    }
+
+    const currentVent = VENTS.find(vent => vent.id === imp.currentVentId);
+    if (!currentVent) {
+      imp.inVent = false;
+      imp.currentVentId = null;
+      return false;
+    }
+
+    // Selecting the current vent exits at that opening.
+    if (requestedVent.id === currentVent.id) {
+      imp.x = currentVent.x;
+      imp.y = currentVent.y;
+      imp.vx = 0;
+      imp.vy = 0;
+      imp.inVent = false;
+      imp.currentVentId = null;
+      return true;
+    }
+
+    // Travel is allowed only across an explicit edge in the vent graph.
+    if (!currentVent.connectsTo.includes(requestedVent.id)) return false;
+    imp.x = requestedVent.x;
+    imp.y = requestedVent.y;
+    imp.vx = 0;
+    imp.vy = 0;
+    imp.currentVentId = requestedVent.id;
     return true;
   }
 
@@ -506,8 +562,8 @@ export class GameEngine {
 
     // Human chat can require an immediate bot reaction (for example, when a
     // bot is named or accused) instead of waiting for its scheduled dialogue.
-    if (!sender.isBot && !isGhost && this.phase === 'MEETING') {
-      this.botEngine.handleChatMention(sender, cleanText);
+    if (!isGhost && this.phase === 'MEETING') {
+      this.botEngine.handleMeetingChat(sender, cleanText);
     }
   }
 

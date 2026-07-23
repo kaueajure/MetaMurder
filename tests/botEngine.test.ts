@@ -97,7 +97,11 @@ describe('BotEngine AI Logic', () => {
     const ai: BotAIProvider = {
       configured: true,
       createChat: vi.fn().mockResolvedValue('Eu estava na elétrica, você viu alguma prova?'),
-      chooseVote: vi.fn().mockResolvedValue('SKIP'),
+      chooseVote: vi.fn().mockResolvedValue({
+        targetId: 'SKIP',
+        confidence: 0.4,
+        message: 'Ainda não tenho prova suficiente para acusar alguém.'
+      }),
       chooseAction: vi.fn().mockResolvedValue({ action: 'WAIT', target: '', sabotageType: 'NONE' })
     };
 
@@ -139,5 +143,70 @@ describe('BotEngine AI Logic', () => {
     expect(botReplies).toHaveLength(1);
     expect(botReplies[0].text).toBe('Eu estava na elétrica, você viu alguma prova?');
     expect(ai.createChat).toHaveBeenCalledOnce();
+  });
+
+  it('votes from chat evidence and distrusts an accuser after an innocent is blamed', () => {
+    vi.useFakeTimers();
+    const offlineAI: BotAIProvider = {
+      configured: false,
+      createChat: async () => null,
+      chooseVote: async () => null,
+      chooseAction: async () => null
+    };
+    const roomPlayers = new Map<string, RoomPlayer>();
+    roomPlayers.set('accuser', {
+      id: 'accuser', socketId: 's1', name: 'Acusador', isBot: false,
+      color: 'BLUE', hatId: 'NONE', skinId: 'DEFAULT', isHost: true, isReady: true
+    });
+    roomPlayers.set('suspect', {
+      id: 'suspect', socketId: 's2', name: 'Suspeito', isBot: false,
+      color: 'GREEN', hatId: 'NONE', skinId: 'DEFAULT', isHost: false, isReady: true
+    });
+    roomPlayers.set('bot', {
+      id: 'bot', socketId: null, name: 'Bot-Alpha', isBot: true,
+      color: 'RED', hatId: 'NONE', skinId: 'DEFAULT', isHost: false, isReady: true
+    });
+
+    const engine = new GameEngine('VOTE01', DEFAULT_GAME_SETTINGS, roomPlayers, () => {}, () => {}, offlineAI);
+    const accuser = engine.players.get('accuser')!;
+    const suspect = engine.players.get('suspect')!;
+    const bot = engine.players.get('bot')!;
+    bot.role = 'CREWMATE';
+    suspect.role = 'CREWMATE';
+
+    accuser.x = 1100;
+    accuser.y = 650;
+    engine.bodies.push({
+      id: 'body_vote_ai',
+      victimId: 'victim',
+      victimName: 'Vítima',
+      victimColor: 'WHITE',
+      x: 1100,
+      y: 650,
+      reported: false
+    });
+    expect(engine.reportBody(accuser.id, 'body_vote_ai')).toBe(true);
+    engine.sendChatMessage(
+      accuser.id,
+      'Vi o Suspeito saindo do duto perto do corpo, foi ele.'
+    );
+
+    engine.meetingState!.phase = 'VOTING';
+    (engine as any).botEngine.ensureBotsHaveVoted();
+    expect(engine.meetingState!.votes[bot.id]).toBe(suspect.id);
+
+    (engine as any).botEngine.handleMeetingResult(
+      suspect.id,
+      false,
+      { [bot.id]: suspect.id, [accuser.id]: suspect.id }
+    );
+    suspect.state = 'GHOST';
+    engine.meetingState!.phase = 'VOTING';
+    engine.meetingState!.votes = {};
+    engine.meetingState!.hasVoted = {};
+    (engine as any).botEngine.handleMeetingDiscussion(bot);
+    (engine as any).botEngine.ensureBotsHaveVoted();
+
+    expect(engine.meetingState!.votes[bot.id]).toBe(accuser.id);
   });
 });

@@ -7,7 +7,10 @@ import { Minimap } from './Minimap';
 import { MeetingOverlay } from './MeetingOverlay';
 import { TaskOverlay } from './TaskOverlay';
 import { SabotageOverlay } from './SabotageOverlay';
-import { SABOTAGE_NODES } from '../../shared/mapData';
+import { CameraOverlay } from './CameraOverlay';
+import { VentTravelPanel } from './VentTravelPanel';
+import { DeathOverlay } from './DeathOverlay';
+import { CAMERA_CONSOLE, SABOTAGE_NODES, VENTS } from '../../shared/mapData';
 import { clampGhostPosition, clampPosition, hasLineOfSight } from '../../shared/mapCollision';
 import { socket } from '../socket';
 import { SOCKET_EVENTS } from '../../shared/protocol';
@@ -45,18 +48,25 @@ export const GameView: React.FC<Props> = ({
     facing: 'LEFT' | 'RIGHT';
   }>({ vx: 0, vy: 0, facing: self.facing });
   const isLocallyMovingRef = useRef(false);
+  const interactPressedRef = useRef(false);
+  const ventPressedRef = useRef(false);
 
   const [activeTask, setActiveTask] = useState<PlayerTask | null>(null);
   const [activeSabotageFix, setActiveSabotageFix] = useState<boolean>(false);
+  const [activeCameras, setActiveCameras] = useState(false);
+  const [deathSequenceId, setDeathSequenceId] = useState<string | null>(null);
   const [showMinimap, setShowMinimap] = useState<boolean>(false);
   const [nearbyInteractable, setNearbyInteractable] = useState<string | null>(null);
   const [nearbyBodyId, setNearbyBodyId] = useState<string | null>(null);
+  const [nearbyVentId, setNearbyVentId] = useState<string | null>(null);
   const nearbyInteractableRef = useRef<string | null>(null);
   const nearbyBodyIdRef = useRef<string | null>(null);
+  const nearbyVentIdRef = useRef<string | null>(null);
+  const previousSelfStateRef = useRef(self.state);
   const latestGameStateRef = useRef({ self, players, bodies, sabotage, meeting });
-  const latestUiStateRef = useRef({ activeTask, activeSabotageFix });
+  const latestUiStateRef = useRef({ activeTask, activeSabotageFix, activeCameras, deathSequenceId });
   latestGameStateRef.current = { self, players, bodies, sabotage, meeting };
-  latestUiStateRef.current = { activeTask, activeSabotageFix };
+  latestUiStateRef.current = { activeTask, activeSabotageFix, activeCameras, deathSequenceId };
 
   // Reconcile only meaningful server corrections. Normal updates arrive
   // behind client prediction and must not drag the local character backwards.
@@ -69,6 +79,34 @@ export const GameView: React.FC<Props> = ({
       localPosRef.current = { x: self.x, y: self.y };
     }
   }, [self.x, self.y]);
+
+  useEffect(() => {
+    if (meeting) setActiveCameras(false);
+  }, [meeting]);
+
+  useEffect(() => {
+    const previousState = previousSelfStateRef.current;
+    const becameGhost =
+      previousState === 'ALIVE' &&
+      (self.state === 'DEAD' || self.state === 'GHOST');
+    const ownBody = bodies.find(body => body.victimId === self.id);
+
+    if (becameGhost && ownBody) {
+      setActiveTask(null);
+      setActiveSabotageFix(false);
+      setActiveCameras(false);
+      setShowMinimap(false);
+      setDeathSequenceId(ownBody.id);
+      isLocallyMovingRef.current = false;
+      localMotionRef.current = {
+        ...localMotionRef.current,
+        vx: 0,
+        vy: 0
+      };
+    }
+
+    previousSelfStateRef.current = self.state;
+  }, [bodies, self.id, self.state]);
 
   // Canvas & Input Handler Setup
   useEffect(() => {
@@ -112,16 +150,22 @@ export const GameView: React.FC<Props> = ({
       } = latestGameStateRef.current;
       const {
         activeTask: currentTask,
-        activeSabotageFix: currentSabotageFix
+        activeSabotageFix: currentSabotageFix,
+        activeCameras: currentCameras,
+        deathSequenceId: currentDeathSequence
       } = latestUiStateRef.current;
+      const inputState = inputHandlerRef.current?.getInputState();
 
       if (
-        inputHandlerRef.current &&
+        inputState &&
         !currentMeeting &&
         !currentTask &&
-        !currentSabotageFix
+        !currentSabotageFix &&
+        !currentCameras &&
+        !currentDeathSequence &&
+        !currentSelf.inVent
       ) {
-        const state = inputHandlerRef.current.getInputState();
+        const state = inputState;
         const isMoving = state.moveX !== 0 || state.moveY !== 0;
         
         if (isMoving) {
@@ -193,6 +237,15 @@ export const GameView: React.FC<Props> = ({
           }
         }
 
+        if (
+          !detectedInteractable &&
+          currentSelf.state === 'ALIVE' &&
+          Math.hypot(posX - CAMERA_CONSOLE.x, posY - CAMERA_CONSOLE.y) < 105 &&
+          hasLineOfSight({ x: posX, y: posY }, CAMERA_CONSOLE)
+        ) {
+          detectedInteractable = CAMERA_CONSOLE.id;
+        }
+
         // Check Sabotage Nodes
         if (
           !detectedInteractable &&
@@ -203,6 +256,26 @@ export const GameView: React.FC<Props> = ({
           if (Math.sqrt(Math.pow(posX - node.x, 2) + Math.pow(posY - node.y, 2)) < 120) {
             detectedInteractable = 'LIGHTS_BREAKER';
           }
+        }
+
+        let detectedVentId: string | null = null;
+        if (currentSelf.role === 'IMPOSTOR' && currentSelf.state === 'ALIVE') {
+          const nearestVent = VENTS
+            .map(vent => ({
+              vent,
+              distance: Math.hypot(posX - vent.x, posY - vent.y)
+            }))
+            .filter(candidate =>
+              candidate.distance <= 75 &&
+              hasLineOfSight({ x: posX, y: posY }, candidate.vent)
+            )
+            .sort((a, b) => a.distance - b.distance)[0]?.vent;
+          detectedVentId = nearestVent?.id ?? null;
+          if (!detectedInteractable && detectedVentId) detectedInteractable = detectedVentId;
+        }
+        if (detectedVentId !== nearbyVentIdRef.current) {
+          nearbyVentIdRef.current = detectedVentId;
+          setNearbyVentId(detectedVentId);
         }
 
         if (detectedInteractable !== nearbyInteractableRef.current) {
@@ -229,7 +302,7 @@ export const GameView: React.FC<Props> = ({
         }
 
         // Auto trigger interaction if 'E' or Space pressed
-        if (state.isInteracting && detectedInteractable) {
+        if (state.isInteracting && !interactPressedRef.current && detectedInteractable) {
           triggerInteract(detectedInteractable);
         }
       } else {
@@ -240,6 +313,25 @@ export const GameView: React.FC<Props> = ({
           vy: 0
         };
       }
+
+      const controlsAvailable =
+        !currentMeeting &&
+        !currentTask &&
+        !currentSabotageFix &&
+        !currentCameras &&
+        !currentDeathSequence;
+      if (
+        inputState?.isVentPressed &&
+        !ventPressedRef.current &&
+        controlsAvailable &&
+        currentSelf.role === 'IMPOSTOR' &&
+        currentSelf.state === 'ALIVE'
+      ) {
+        const ventId = currentSelf.currentVentId ?? nearbyVentIdRef.current;
+        if (ventId) socket.emit(SOCKET_EVENTS.C2S_VENT, { ventId });
+      }
+      interactPressedRef.current = Boolean(inputState?.isInteracting);
+      ventPressedRef.current = Boolean(inputState?.isVentPressed);
 
       // Render Scene
       if (rendererRef.current) {
@@ -282,6 +374,10 @@ export const GameView: React.FC<Props> = ({
   const triggerInteract = (targetId: string) => {
     if (targetId === 'LIGHTS_BREAKER') {
       setActiveSabotageFix(true);
+    } else if (targetId === CAMERA_CONSOLE.id) {
+      setActiveCameras(true);
+    } else if (VENTS.some(vent => vent.id === targetId)) {
+      socket.emit(SOCKET_EVENTS.C2S_VENT, { ventId: targetId });
     } else {
       const task = latestGameStateRef.current.self.tasks.find(t => t.id === targetId);
       if (task) {
@@ -328,7 +424,7 @@ export const GameView: React.FC<Props> = ({
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950">
       <canvas ref={canvasRef} className="absolute inset-0 block cursor-pointer" />
 
-      {!meeting && (
+      {!meeting && !deathSequenceId && (
         <HUD
           self={predictedSelf}
           completedTasks={completedTaskCount}
@@ -336,6 +432,7 @@ export const GameView: React.FC<Props> = ({
           sabotage={sabotage}
           nearbyInteractable={nearbyInteractable}
           canReport={nearbyBodyId !== null}
+          canVent={Boolean(nearbyVentId) || self.inVent}
           onJoystickMove={(dir) => {
             if (inputHandlerRef.current) {
               inputHandlerRef.current.joystickDir = dir;
@@ -345,7 +442,10 @@ export const GameView: React.FC<Props> = ({
           onKill={handleKill}
           onReport={handleReport}
           onSabotage={handleSabotage}
-          onVent={() => {}}
+          onVent={() => {
+            const ventId = self.currentVentId ?? nearbyVentId;
+            if (ventId) socket.emit(SOCKET_EVENTS.C2S_VENT, { ventId });
+          }}
           onToggleMinimap={() => setShowMinimap(!showMinimap)}
         />
       )}
@@ -371,6 +471,22 @@ export const GameView: React.FC<Props> = ({
         />
       )}
 
+      {activeCameras && (
+        <CameraOverlay
+          players={players}
+          bodies={bodies}
+          onClose={() => setActiveCameras(false)}
+        />
+      )}
+
+      {self.inVent && self.currentVentId && (
+        <VentTravelPanel
+          currentVentId={self.currentVentId}
+          onTravel={ventId => socket.emit(SOCKET_EVENTS.C2S_VENT, { ventId })}
+          onExit={() => socket.emit(SOCKET_EVENTS.C2S_VENT, { ventId: self.currentVentId! })}
+        />
+      )}
+
       {meeting && (
         <MeetingOverlay
           meeting={meeting}
@@ -379,6 +495,14 @@ export const GameView: React.FC<Props> = ({
           chatMessages={chatMessages}
           onCastVote={(targetId) => socket.emit(SOCKET_EVENTS.C2S_CAST_VOTE, { targetId })}
           onSendMessage={(text) => socket.emit(SOCKET_EVENTS.C2S_SEND_CHAT, { text })}
+        />
+      )}
+
+      {deathSequenceId && (
+        <DeathOverlay
+          key={deathSequenceId}
+          player={self}
+          onComplete={() => setDeathSequenceId(null)}
         />
       )}
     </div>

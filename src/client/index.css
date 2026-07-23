@@ -19,3 +19,113 @@ body {
 canvas {
   touch-action: none;
 }
+
+@keyframes death-blackout {
+  0% { opacity: 0; }
+  7%, 82% { opacity: 0.96; }
+  100% { opacity: 0; }
+}
+
+@keyframes death-red-flash {
+  0%, 3% { opacity: 0; }
+  5% { opacity: 1; }
+  12% { opacity: 0.12; }
+  24%, 100% { opacity: 0; }
+}
+
+@keyframes death-character-fall {
+  0%, 4% { opacity: 0; transform: translate3d(42vw, -5vh, 0) rotate(8deg) scale(0.75); }
+  10% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0) scale(1.12); }
+  21% { opacity: 1; transform: translate3d(-2vw, 4vh, 0) rotate(-12deg) scale(1); }
+  35% { opacity: 0; transform: translate3d(-8vw, 24vh, 0) rotate(-42deg) scale(0.86); }
+  100% { opacity: 0; }
+}
+
+@keyframes death-cut {
+  0%, 7% { opacity: 0; transform: translateX(-85vw) rotate(-12deg) scaleX(0.2); }
+  10% { opacity: 1; transform: translateX(0) rotate(-12deg) scaleX(1); }
+  17% { opacity: 0; transform: translateX(55vw) rotate(-12deg) scaleX(1.35); }
+  100% { opacity: 0; }
+}
+
+@keyframes death-message {
+  0%, 28% { opacity: 0; transform: scale(1.16); filter: blur(12px); }
+  39%, 78% { opacity: 1; transform: scale(1); filter: blur(0); }
+  100% { opacity: 0; transform: scale(0.97); }
+}
+
+@keyframes death-title {
+  0%, 34% { letter-spacing: 0.25em; }
+  46%, 100% { letter-spacing: -0.03em; }
+}
+
+@keyframes death-streak {
+  0%, 5% { opacity: 0; transform: translateX(-120vw) skewX(-20deg); }
+  10% { opacity: 0.65; }
+  22%, 100% { opacity: 0; transform: translateX(120vw) skewX(-20deg); }
+}
+
+.death-blackout {
+  animation: death-blackout 3.6s ease-in-out both;
+}
+
+.death-red-flash {
+  background: radial-gradient(circle at center, rgba(255,255,255,.92) 0, rgba(244,63,94,.82) 18%, rgba(127,29,29,.48) 50%, transparent 76%);
+  animation: death-red-flash 3.6s ease-out both;
+}
+
+.death-vignette {
+  background:
+    radial-gradient(circle at center, transparent 24%, rgba(76,5,25,.34) 62%, rgba(0,0,0,.96) 100%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0, rgba(255,255,255,.018) 1px, transparent 1px, transparent 5px);
+}
+
+.death-character-wrap {
+  animation: death-character-fall 3.6s cubic-bezier(.18,.75,.2,1) both;
+}
+
+.death-character {
+  filter: drop-shadow(0 0 28px rgba(244,63,94,.55));
+}
+
+.death-cut {
+  animation: death-cut 3.6s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.death-message {
+  animation: death-message 3.6s ease-in-out both;
+}
+
+.death-title {
+  text-shadow: 0 0 36px rgba(244,63,94,.38), 0 6px 30px rgba(0,0,0,.85);
+  animation: death-title 3.6s ease-out both;
+}
+
+.death-streak {
+  left: -20vw;
+  width: 30vw;
+  height: 140vh;
+  top: -20vh;
+  background: linear-gradient(90deg, transparent, rgba(244,63,94,.2), transparent);
+  animation: death-streak 3.6s ease-out both;
+}
+
+.death-streak-one { animation-delay: 0s; }
+.death-streak-two { animation-delay: .08s; left: 5vw; opacity: .45; }
+.death-streak-three { animation-delay: .14s; left: 32vw; opacity: .25; }
+
+@media (prefers-reduced-motion: reduce) {
+  .death-character-wrap,
+  .death-cut,
+  .death-streak {
+    display: none;
+  }
+
+  .death-blackout,
+  .death-red-flash,
+  .death-message,
+  .death-title {
+    animation-duration: 3.6s;
+    animation-timing-function: linear;
+  }
+}

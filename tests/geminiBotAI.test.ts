@@ -72,4 +72,45 @@ describe('Gemini bot integration', () => {
     const ai = new GeminiBotAI();
     await expect(ai.chooseAction('estado', ['real-player'])).resolves.toBeNull();
   });
+
+  it('returns a structured chat-aware vote with confidence and explanation', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [{
+          content: {
+            parts: [{
+              text: JSON.stringify({
+                targetId: 'player_2',
+                confidence: 0.82,
+                message: 'Vou no jogador 2 porque a versão dele mudou depois da acusação.'
+              })
+            }]
+          }
+        }]
+      })
+    }));
+
+    const ai = new GeminiBotAI();
+    const decision = await ai.chooseVote(
+      JSON.stringify({
+        recentChat: ['Jogador 1 acusou Jogador 2'],
+        discussionAnalysis: { learnedFromPreviousMeetings: ['Jogador 1 já acusou um inocente.'] }
+      }),
+      ['player_1', 'player_2', 'SKIP']
+    );
+
+    expect(decision).toEqual({
+      targetId: 'player_2',
+      confidence: 0.82,
+      message: 'Vou no jogador 2 porque a versão dele mudou depois da acusação.'
+    });
+
+    const fetchMock = vi.mocked(fetch);
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+    const prompt = requestBody.contents[0].parts[0].text as string;
+    expect(prompt).toContain('histórico de acusações erradas');
+    expect(prompt).toContain('modo de falar');
+  });
 });

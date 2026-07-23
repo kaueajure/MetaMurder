@@ -1,12 +1,15 @@
 import { PlayerPublicData, PlayerPrivateData, DeadBody, SabotageState } from '../../shared/types';
 import {
   BUILDING_BOUNDS,
+  CAMERA_CONSOLE,
   CORRIDOR_AREAS,
   MAP_BOUNDS,
   MAP_OBSTACLES,
   MAP_WALLS,
   ROOMS,
   SABOTAGE_NODES,
+  SECURITY_CAMERAS,
+  SecurityCamera,
   TASK_DEFINITIONS,
   VENTS
 } from '../../shared/mapData';
@@ -74,6 +77,62 @@ export class Renderer {
     }
 
     ctx.restore();
+  }
+
+  public renderCameraFeed(
+    camera: SecurityCamera,
+    players: PlayerPublicData[],
+    bodies: DeadBody[]
+  ): void {
+    const ctx = this.ctx;
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+    ctx.clearRect(0, 0, width, height);
+
+    ctx.save();
+    ctx.translate(width / 2 - camera.viewX, height / 2 - camera.viewY);
+    this.renderSpaceGrid(ctx);
+    this.renderRooms(ctx);
+    this.renderFurniture(ctx);
+    this.renderWalls(ctx);
+
+    const observer: PlayerPrivateData = {
+      id: '__camera__',
+      name: '',
+      isBot: false,
+      color: 'WHITE',
+      hatId: 'NONE',
+      skinId: 'DEFAULT',
+      x: camera.viewX,
+      y: camera.viewY,
+      vx: 0,
+      vy: 0,
+      facing: 'RIGHT',
+      state: 'ALIVE',
+      isReady: true,
+      isHost: false,
+      inVent: false,
+      currentVentId: null,
+      role: 'CREWMATE',
+      tasks: [],
+      killCooldownRemaining: 0,
+      sabotageCooldownRemaining: 0
+    };
+    this.renderMapObjects(ctx, null, observer);
+    this.renderBodies(ctx, bodies);
+    players
+      .filter(player => !player.inVent)
+      .forEach(player => this.renderPlayerCharacter(ctx, player, false));
+    ctx.restore();
+
+    // Monitor scanlines and edge vignette are rendered in screen space.
+    const vignette = ctx.createRadialGradient(width / 2, height / 2, height * 0.2, width / 2, height / 2, width * 0.68);
+    vignette.addColorStop(0, 'rgba(2,6,23,0)');
+    vignette.addColorStop(1, 'rgba(2,6,23,.62)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = 'rgba(103,232,249,.045)';
+    for (let y = 0; y < height; y += 5) ctx.fillRect(0, y, width, 1);
   }
 
   private renderSpaceGrid(ctx: CanvasRenderingContext2D): void {
@@ -338,7 +397,64 @@ export class Renderer {
       }
     });
 
-    // 2. Task Stations assigned to this player
+    // 2. Security cameras and their live monitoring console.
+    SECURITY_CAMERAS.forEach(camera => {
+      ctx.save();
+      ctx.translate(camera.x, camera.y);
+      ctx.rotate(camera.rotation);
+      const cone = ctx.createLinearGradient(0, 0, 115, 0);
+      cone.addColorStop(0, 'rgba(34,211,238,.16)');
+      cone.addColorStop(1, 'rgba(34,211,238,0)');
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(8, 0);
+      ctx.lineTo(115, -55);
+      ctx.lineTo(115, 55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#67e8f9';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-13, -9, 30, 18, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(9, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    const consoleNearby = nearbyId === CAMERA_CONSOLE.id;
+    ctx.save();
+    ctx.translate(CAMERA_CONSOLE.x, CAMERA_CONSOLE.y);
+    ctx.fillStyle = consoleNearby ? '#22d3ee' : '#164e63';
+    ctx.shadowColor = '#22d3ee';
+    ctx.shadowBlur = consoleNearby ? 20 : 8;
+    ctx.beginPath();
+    ctx.roundRect(-22, -17, 44, 34, 7);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#a5f3fc';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(-14, -9, 28, 15);
+    ctx.fillStyle = '#67e8f9';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CAM', 0, 3);
+    if (consoleNearby) {
+      ctx.fillStyle = '#67e8f9';
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.fillText('VER CÂMERAS [E]', 0, -28);
+    }
+    ctx.restore();
+
+    // 3. Task Stations assigned to this player
     TASK_DEFINITIONS.forEach(task => {
       const assignedTask = self.tasks.find(playerTask => playerTask.definitionId === task.id);
       if (self.role === 'CREWMATE' && (!assignedTask || assignedTask.completed)) return;
@@ -382,19 +498,68 @@ export class Renderer {
     bodies.forEach(body => {
       const colorObj = PLAYER_COLORS.find(c => c.id === body.victimColor) || PLAYER_COLORS[0];
 
-      // Suit body lying flat
-      ctx.fillStyle = colorObj.hex;
+      ctx.save();
+      ctx.translate(body.x, body.y);
+
+      // Large pool and shadow keep the body readable against detailed floors.
+      const shadow = ctx.createRadialGradient(0, 11, 4, 0, 11, 42);
+      shadow.addColorStop(0, 'rgba(0,0,0,.62)');
+      shadow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = shadow;
       ctx.beginPath();
-      ctx.ellipse(body.x, body.y, 24, 14, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 12, 44, 18, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Exposed bone graphic
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(body.x - 4, body.y - 12, 8, 12);
+      const suit = ctx.createLinearGradient(-30, -16, 28, 18);
+      suit.addColorStop(0, lightenHex(colorObj.hex, 24));
+      suit.addColorStop(0.48, colorObj.hex);
+      suit.addColorStop(1, colorObj.darkHex);
+      ctx.fillStyle = suit;
+      ctx.strokeStyle = 'rgba(255,255,255,.35)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(body.x - 4, body.y - 12, 4, 0, Math.PI * 2);
-      ctx.arc(body.x + 4, body.y - 12, 4, 0, Math.PI * 2);
+      ctx.roundRect(-32, -13, 55, 31, 13);
       ctx.fill();
+      ctx.stroke();
+
+      // Broken visor.
+      const visor = ctx.createLinearGradient(-23, -10, 2, 8);
+      visor.addColorStop(0, '#cffafe');
+      visor.addColorStop(0.45, '#22d3ee');
+      visor.addColorStop(1, '#164e63');
+      ctx.fillStyle = visor;
+      ctx.beginPath();
+      ctx.roundRect(-26, -9, 25, 17, 7);
+      ctx.fill();
+      ctx.strokeStyle = '#a5f3fc';
+      ctx.stroke();
+      ctx.strokeStyle = '#082f49';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-15, -7);
+      ctx.lineTo(-11, 0);
+      ctx.lineTo(-17, 7);
+      ctx.stroke();
+
+      // Exposed bone with a dark severed edge.
+      ctx.fillStyle = '#450a0a';
+      ctx.beginPath();
+      ctx.ellipse(25, 0, 9, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(23, -15, 8, 17);
+      ctx.beginPath();
+      ctx.arc(23, -15, 5, 0, Math.PI * 2);
+      ctx.arc(31, -15, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fecaca';
+      ctx.font = '900 10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 5;
+      ctx.fillText('CORPO', 0, 35);
+      ctx.restore();
     });
   }
 

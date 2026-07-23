@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { clampPosition, checkWallCollision } from '../src/shared/mapCollision';
 import {
+  CAMERA_CONSOLE,
   MAP_BOUNDS,
   MAP_OBSTACLES,
   SPAWN_POINTS,
   TASK_DEFINITIONS,
+  SECURITY_CAMERAS,
   VENTS
 } from '../src/shared/mapData';
 
@@ -26,7 +28,7 @@ describe('Map collision and task reachability', () => {
     }, 16)).toBe(true);
   });
 
-  it('keeps every task and vent reachable from the central corridor spawn', () => {
+  it('keeps every task, vent and camera console reachable from the central corridor spawn', () => {
     const gridSize = 20;
     const key = (x: number, y: number) => `${Math.round(x / gridSize)},${Math.round(y / gridSize)}`;
     const start = SPAWN_POINTS[0];
@@ -57,11 +59,18 @@ describe('Map collision and task reachability', () => {
       }
     }
 
-    for (const interactable of [...TASK_DEFINITIONS, ...VENTS]) {
+    for (const interactable of [...TASK_DEFINITIONS, ...VENTS, CAMERA_CONSOLE]) {
       const reachable = [-40, -20, 0, 20, 40].some(dx =>
         [-40, -20, 0, 20, 40].some(dy => visited.has(key(interactable.x + dx, interactable.y + dy)))
       );
       expect(reachable, `${interactable.id} should be reachable`).toBe(true);
+    }
+
+    for (const camera of SECURITY_CAMERAS) {
+      expect(camera.viewX).toBeGreaterThan(0);
+      expect(camera.viewX).toBeLessThan(MAP_BOUNDS.width);
+      expect(camera.viewY).toBeGreaterThan(0);
+      expect(camera.viewY).toBeLessThan(MAP_BOUNDS.height);
     }
   });
 });

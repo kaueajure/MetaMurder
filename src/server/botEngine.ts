@@ -129,6 +129,16 @@ interface SeenPlayer {
   time: number;
 }
 
+interface MeetingAccusation {
+  accuserId: string;
+  targetId: string;
+  message: string;
+  evidenceScore: number;
+  strength: number;
+  tone: 'hesitante' | 'assertivo' | 'agressivo' | 'neutro';
+  timestamp: number;
+}
+
 interface BotMemory {
   personality: BotPersonality;
   currentRoomName: string;
@@ -144,6 +154,10 @@ interface BotMemory {
   nextDecisionAt: number;
   chatCount: number;
   pendingDefense: boolean;
+  meetingStartedAt: number;
+  meetingAccusations: MeetingAccusation[];
+  suspicionScores: Map<string, number>;
+  reasoningHistory: string[];
 }
 
 export class BotEngine {
@@ -172,7 +186,11 @@ export class BotEngine {
       decisionPending: false,
       nextDecisionAt: 0,
       chatCount: 0,
-      pendingDefense: false
+      pendingDefense: false,
+      meetingStartedAt: 0,
+      meetingAccusations: [],
+      suspicionScores: new Map(),
+      reasoningHistory: []
     });
   }
 
@@ -198,15 +216,53 @@ export class BotEngine {
     const memory = this.getMemory(bot.id);
     memory.chatCount = 0;
     memory.decision = null;
+    memory.meetingStartedAt = Date.now();
+    memory.meetingAccusations = [];
 
     [1200, 5600].forEach(delay => {
       setTimeout(() => void this.sendAIChat(bot, memory), delay + Math.abs(this.hash(bot.id)) % 700);
     });
   }
 
-  public handleChatMention(sender: GamePlayer, text: string): void {
+  public handleMeetingChat(sender: GamePlayer, text: string): void {
     if (!this.gameEngine.meetingState || this.gameEngine.phase !== 'MEETING') return;
-    if (sender.isBot || sender.state !== 'ALIVE') return;
+    if (this.gameEngine.meetingState.phase === 'RESULT' || sender.state !== 'ALIVE') return;
+
+    const accusations = this.extractAccusations(sender, text);
+    for (const bot of this.gameEngine.players.values()) {
+      if (!bot.isBot) continue;
+      const memory = this.getMemory(bot.id);
+      for (const accusation of accusations) {
+        const changedTarget = memory.meetingAccusations.some(previous =>
+          previous.accuserId === accusation.accuserId &&
+          previous.targetId !== accusation.targetId
+        );
+        memory.meetingAccusations.push(accusation);
+
+        const personalityMultiplier = memory.personality === 'analítico'
+          ? 0.85 + accusation.evidenceScore * 0.12
+          : memory.personality === 'impulsivo'
+            ? 1.18
+            : memory.personality === 'cauteloso'
+              ? 0.82
+              : 1;
+        this.adjustSuspicion(memory, accusation.targetId, accusation.strength * personalityMultiplier);
+
+        // Pressão agressiva sem evidência e mudanças bruscas de alvo também
+        // tornam o próprio acusador menos confiável nas próximas reuniões.
+        if (
+          (accusation.tone === 'agressivo' && accusation.evidenceScore === 0) ||
+          (changedTarget && accusation.evidenceScore === 0)
+        ) {
+          this.adjustSuspicion(memory, accusation.accuserId, changedTarget ? 0.7 : 0.4);
+        }
+      }
+    }
+
+    // Immediate defensive answers are reserved for human accusations to
+    // avoid bot-to-bot reply loops. Scheduled messages still let every bot
+    // participate naturally in the discussion.
+    if (sender.isBot) return;
 
     for (const bot of this.gameEngine.players.values()) {
       if (!bot.isBot || bot.state !== 'ALIVE' || !this.mentionsPlayer(text, bot.name)) continue;
@@ -226,11 +282,58 @@ export class BotEngine {
     }
   }
 
+  public handleMeetingResult(
+    ejectedPlayerId: string,
+    wasImpostor: boolean,
+    votes: Record<string, string>
+  ): void {
+    const ejectedName = this.gameEngine.players.get(ejectedPlayerId)?.name ?? ejectedPlayerId;
+    for (const memory of this.memories.values()) {
+      const relevantAccusations = memory.meetingAccusations
+        .filter(accusation => accusation.targetId === ejectedPlayerId);
+
+      for (const accusation of relevantAccusations) {
+        const accuserName = this.gameEngine.players.get(accusation.accuserId)?.name ?? accusation.accuserId;
+        if (wasImpostor) {
+          this.adjustSuspicion(memory, accusation.accuserId, -Math.max(0.3, accusation.strength * 0.35));
+          memory.reasoningHistory.push(
+            `${accuserName} acusou ${ejectedName} corretamente e ganhou credibilidade.`
+          );
+        } else {
+          this.adjustSuspicion(memory, accusation.accuserId, Math.max(0.8, accusation.strength * 1.15));
+          memory.reasoningHistory.push(
+            `${accuserName} pressionou ${ejectedName}, que era inocente; desconfiar mais de ${accuserName}.`
+          );
+        }
+      }
+
+      if (!wasImpostor) {
+        for (const [voterId, targetId] of Object.entries(votes)) {
+          if (targetId === ejectedPlayerId) this.adjustSuspicion(memory, voterId, 0.45);
+        }
+      }
+
+      memory.suspicionScores.delete(ejectedPlayerId);
+      memory.reasoningHistory = memory.reasoningHistory.slice(-8);
+    }
+  }
+
   public handleMeetingVoting(bot: GamePlayer): void {
     if (bot.state !== 'ALIVE') return;
 
     const delay = 1800 + Math.abs(this.hash(`${bot.id}:vote`)) % 2200;
     setTimeout(() => void this.castAIVote(bot), delay);
+  }
+
+  public ensureBotsHaveVoted(): void {
+    const meeting = this.gameEngine.meetingState;
+    if (!meeting || meeting.phase !== 'VOTING') return;
+
+    for (const bot of this.gameEngine.players.values()) {
+      if (!bot.isBot || bot.state !== 'ALIVE' || meeting.hasVoted[bot.id]) continue;
+      const eligible = this.eligibleVoteTargets(bot);
+      this.gameEngine.castVote(bot.id, this.chooseEvidenceVote(bot, this.getMemory(bot.id), eligible));
+    }
   }
 
   private requestWorldDecisionWhenNeeded(bot: GamePlayer, memory: BotMemory): void {
@@ -383,16 +486,32 @@ export class BotEngine {
   }
 
   private async castAIVote(bot: GamePlayer): Promise<void> {
-    if (this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState || bot.state !== 'ALIVE') return;
+    if (
+      this.gameEngine.phase !== 'MEETING' ||
+      !this.gameEngine.meetingState ||
+      this.gameEngine.meetingState.phase !== 'VOTING' ||
+      this.gameEngine.meetingState.hasVoted[bot.id] ||
+      bot.state !== 'ALIVE'
+    ) return;
     const memory = this.getMemory(bot.id);
-    const eligible = Array.from(this.gameEngine.players.values())
-      .filter(player => player.state === 'ALIVE' && player.id !== bot.id)
-      .map(player => player.id);
-    eligible.push('SKIP');
+    const eligible = this.eligibleVoteTargets(bot);
 
-    const targetId = await this.ai.chooseVote(this.buildContext(bot, memory, true), eligible);
-    if (this.gameEngine.phase !== 'MEETING' || !this.gameEngine.meetingState) return;
-    this.gameEngine.castVote(bot.id, targetId && eligible.includes(targetId) ? targetId : 'SKIP');
+    const decision = await this.ai.chooseVote(this.buildContext(bot, memory, true), eligible);
+    if (
+      this.gameEngine.phase !== 'MEETING' ||
+      !this.gameEngine.meetingState ||
+      this.gameEngine.meetingState.phase !== 'VOTING' ||
+      this.gameEngine.meetingState.hasVoted[bot.id]
+    ) return;
+
+    const targetId = decision && eligible.includes(decision.targetId)
+      ? decision.targetId
+      : this.chooseEvidenceVote(bot, memory, eligible);
+
+    if (decision?.message) {
+      this.gameEngine.sendChatMessage(bot.id, decision.message);
+    }
+    this.gameEngine.castVote(bot.id, targetId);
   }
 
   private buildContext(bot: GamePlayer, memory: BotMemory, includeChat: boolean): string {
@@ -419,8 +538,41 @@ export class BotEngine {
       }))
       : [];
     const chat = includeChat
-      ? this.gameEngine.chatMessages.slice(-12).map(message => `${message.senderName}: ${message.text}`)
+      ? this.gameEngine.chatMessages
+        .filter(message => message.timestamp >= memory.meetingStartedAt)
+        .slice(-30)
+        .map(message => ({
+          senderId: message.senderId,
+          senderName: message.senderName,
+          text: message.text,
+          timestamp: message.timestamp
+        }))
       : [];
+    const playerName = (playerId: string) =>
+      this.gameEngine.players.get(playerId)?.name ?? playerId;
+    const discussionAnalysis = includeChat
+      ? {
+        accusations: memory.meetingAccusations.map(accusation => ({
+          accuserId: accusation.accuserId,
+          accuserName: playerName(accusation.accuserId),
+          targetId: accusation.targetId,
+          targetName: playerName(accusation.targetId),
+          evidenceScore: accusation.evidenceScore,
+          strength: Number(accusation.strength.toFixed(2)),
+          tone: accusation.tone,
+          originalMessage: accusation.message
+        })),
+        suspicion: Array.from(memory.suspicionScores.entries())
+          .filter(([playerId]) => this.gameEngine.players.get(playerId)?.state === 'ALIVE')
+          .map(([playerId, score]) => ({
+            playerId,
+            playerName: playerName(playerId),
+            score: Number(score.toFixed(2))
+          }))
+          .sort((a, b) => b.score - a.score),
+        learnedFromPreviousMeetings: memory.reasoningHistory
+      }
+      : null;
 
     return JSON.stringify({
       self: {
@@ -442,8 +594,40 @@ export class BotEngine {
       bodies: visibleBodies,
       tasks,
       recentChat: chat,
+      discussionAnalysis,
       observedAt: now
     });
+  }
+
+  private eligibleVoteTargets(bot: GamePlayer): string[] {
+    const eligible = Array.from(this.gameEngine.players.values())
+      .filter(player => player.state === 'ALIVE' && player.id !== bot.id)
+      .map(player => player.id);
+    eligible.push('SKIP');
+    return eligible;
+  }
+
+  private chooseEvidenceVote(bot: GamePlayer, memory: BotMemory, eligible: string[]): string {
+    const candidates = eligible.filter(targetId => targetId !== 'SKIP');
+    let bestTarget = 'SKIP';
+    let bestScore = 0.8;
+
+    for (const targetId of candidates) {
+      const target = this.gameEngine.players.get(targetId);
+      if (!target) continue;
+      if (bot.role === 'IMPOSTOR' && target.role === 'IMPOSTOR') continue;
+
+      const score = memory.suspicionScores.get(targetId) ?? 0;
+      if (
+        score > bestScore ||
+        (score === bestScore && Math.abs(this.hash(`${bot.id}:${targetId}`)) % 2 === 0)
+      ) {
+        bestTarget = targetId;
+        bestScore = score;
+      }
+    }
+
+    return eligible.includes(bestTarget) ? bestTarget : 'SKIP';
   }
 
   private validWorldTargets(bot: GamePlayer, memory: BotMemory): string[] {
@@ -575,6 +759,71 @@ export class BotEngine {
     }
   }
 
+  private extractAccusations(sender: GamePlayer, text: string): MeetingAccusation[] {
+    const normalized = this.normalizeText(text);
+    const accusationSignal = /\b(foi|matou|assassino|culpado|suspeito|sus|ventou|duto|voto|votar|expulsa|expulsar)\b/u;
+    if (!accusationSignal.test(normalized)) return [];
+
+    const evidenceSignals = [
+      /\bvi\b/u,
+      /\bporque\b/u,
+      /\bcorpo\b/u,
+      /\bsaiu\b/u,
+      /\bentrou\b/u,
+      /\bseguiu\b/u,
+      /\bperto\b/u,
+      /\bjunto\b/u,
+      /\bcamera\b/u,
+      /\btarefa\b/u,
+      /\bventou\b/u,
+      /\bduto\b/u,
+      /\bantes\b/u,
+      /\bdepois\b/u,
+      /\bestava\b/u
+    ];
+    const evidenceScore = Math.min(3, evidenceSignals.filter(signal => signal.test(normalized)).length);
+    const isHesitant = /\b(acho|talvez|pode ser|nao sei|duvida|provavelmente)\b/u.test(normalized);
+    const letters = Array.from(text).filter(character => /\p{L}/u.test(character));
+    const uppercaseCount = letters.filter(character => character === character.toLocaleUpperCase('pt-BR')).length;
+    const uppercaseRatio = letters.length > 3 ? uppercaseCount / letters.length : 0;
+    const isAggressive =
+      uppercaseRatio > 0.65 ||
+      /!{2,}/u.test(text) ||
+      /\b(mentiroso|burro|idiota|cala)\b/u.test(normalized);
+    const tone: MeetingAccusation['tone'] = isAggressive
+      ? 'agressivo'
+      : isHesitant
+        ? 'hesitante'
+        : evidenceScore > 0
+          ? 'assertivo'
+          : 'neutro';
+    const strength = Math.max(
+      0.25,
+      0.5 + evidenceScore * 0.5 + (tone === 'assertivo' ? 0.25 : 0) - (isHesitant ? 0.2 : 0)
+    );
+
+    return Array.from(this.gameEngine.players.values())
+      .filter(target =>
+        target.id !== sender.id &&
+        target.state === 'ALIVE' &&
+        this.mentionsPlayer(text, target.name)
+      )
+      .map(target => ({
+        accuserId: sender.id,
+        targetId: target.id,
+        message: text,
+        evidenceScore,
+        strength,
+        tone,
+        timestamp: Date.now()
+      }));
+  }
+
+  private adjustSuspicion(memory: BotMemory, playerId: string, delta: number): void {
+    const current = memory.suspicionScores.get(playerId) ?? 0;
+    memory.suspicionScores.set(playerId, Math.max(-2, Math.min(8, current + delta)));
+  }
+
   private invalidateDecision(memory: BotMemory): void {
     memory.decision = null;
     memory.nextDecisionAt = 0;
@@ -590,13 +839,16 @@ export class BotEngine {
   }
 
   private mentionsPlayer(text: string, playerName: string): boolean {
-    const normalize = (value: string) => value
+    const escapedName = this.normalizeText(playerName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escapedName}(?=$|[^\\p{L}\\p{N}_])`, 'u')
+      .test(this.normalizeText(text));
+  }
+
+  private normalizeText(value: string): string {
+    return value
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLocaleLowerCase('pt-BR');
-    const escapedName = normalize(playerName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escapedName}(?=$|[^\\p{L}\\p{N}_])`, 'u')
-      .test(normalize(text));
   }
 
   private distance(a: Vector2D, b: Vector2D): number {

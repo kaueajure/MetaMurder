@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { GameEngine, GamePlayer } from '../src/server/gameEngine';
 import { DEFAULT_GAME_SETTINGS } from '../src/shared/constants';
 import { RoomPlayer } from '../src/server/roomManager';
+import { VENTS } from '../src/shared/mapData';
 
 describe('GameEngine Rules', () => {
   let roomPlayers: Map<string, RoomPlayer>;
@@ -70,6 +71,7 @@ describe('GameEngine Rules', () => {
     });
     engine.reportBody('p1', 'body_vote_test');
     expect(engine.phase).toBe('MEETING');
+    engine.meetingState!.phase = 'VOTING';
 
     // Cast votes
     engine.castVote('p1', 'p2');
@@ -129,6 +131,57 @@ describe('GameEngine Rules', () => {
     crewmate.y = task.y;
     expect(engine.completeTask(crewmate.id, task.id)).toBe(true);
     expect(task.completed).toBe(true);
+  });
+
+  it('validates vent range, connected travel, hidden movement and exit', () => {
+    const engine = new GameEngine('VENT01', DEFAULT_GAME_SETTINGS, roomPlayers, () => {}, () => {});
+    const impostor = Array.from(engine.players.values()).find(player => player.role === 'IMPOSTOR')!;
+    const crewmate = Array.from(engine.players.values()).find(player => player.role === 'CREWMATE')!;
+    const entrance = VENTS.find(vent => vent.id === 'vent_fumo')!;
+    const connected = VENTS.find(vent => vent.id === 'vent_server')!;
+    const disconnected = VENTS.find(vent => vent.id === 'vent_green')!;
+
+    impostor.x = 1100;
+    impostor.y = 610;
+    expect(engine.useVent(impostor.id, entrance.id)).toBe(false);
+
+    impostor.x = entrance.x;
+    impostor.y = entrance.y;
+    expect(engine.useVent(impostor.id, entrance.id)).toBe(true);
+    expect(impostor.inVent).toBe(true);
+    expect(impostor.currentVentId).toBe(entrance.id);
+
+    const hiddenPosition = { x: impostor.x, y: impostor.y };
+    (engine as any).lastMoveAt.set(impostor.id, Date.now() - 1000);
+    engine.handlePlayerMove(
+      impostor.id,
+      impostor.x + 50,
+      impostor.y,
+      200,
+      0,
+      'RIGHT'
+    );
+    expect({ x: impostor.x, y: impostor.y }).toEqual(hiddenPosition);
+
+    expect(engine.useVent(impostor.id, disconnected.id)).toBe(false);
+    expect(impostor.currentVentId).toBe(entrance.id);
+    expect(engine.useVent(impostor.id, connected.id)).toBe(true);
+    expect(impostor.currentVentId).toBe(connected.id);
+    expect({ x: impostor.x, y: impostor.y }).toEqual({ x: connected.x, y: connected.y });
+
+    expect(engine.useVent(impostor.id, connected.id)).toBe(true);
+    expect(impostor.inVent).toBe(false);
+    expect(impostor.currentVentId).toBeNull();
+
+    engine.phase = 'MEETING';
+    impostor.x = entrance.x;
+    impostor.y = entrance.y;
+    expect(engine.useVent(impostor.id, entrance.id)).toBe(false);
+
+    engine.phase = 'PLAYING';
+    crewmate.x = disconnected.x;
+    crewmate.y = disconnected.y;
+    expect(engine.useVent(crewmate.id, disconnected.id)).toBe(false);
   });
 
   it('should reject reporting a body that was not found nearby', () => {

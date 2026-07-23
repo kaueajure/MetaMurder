@@ -18,6 +18,11 @@ export const MeetingOverlay: React.FC<Props> = ({ meeting, players, self, chatMe
 
   const isSelfDead = self.state === 'DEAD' || self.state === 'GHOST';
   const hasVoted = meeting.hasVoted[self.id];
+  const voteTargetName = (targetId: string | undefined) => {
+    if (!targetId) return '';
+    if (targetId === 'SKIP') return 'PULAR';
+    return players.find(player => player.id === targetId)?.name ?? 'DESCONHECIDO';
+  };
 
   const handleVoteConfirm = () => {
     if (selectedTarget && !hasVoted && !isSelfDead) {
@@ -61,6 +66,7 @@ export const MeetingOverlay: React.FC<Props> = ({ meeting, players, self, chatMe
                 const colorObj = PLAYER_COLORS.find(c => c.id === p.color) || PLAYER_COLORS[0];
                 const isDead = p.state === 'DEAD' || p.state === 'GHOST';
                 const pVoted = meeting.hasVoted[p.id];
+                const votedFor = voteTargetName(meeting.votes[p.id]);
                 const isSelected = selectedTarget === p.id;
 
                 return (
@@ -74,6 +80,12 @@ export const MeetingOverlay: React.FC<Props> = ({ meeting, players, self, chatMe
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-white truncate">{p.name}</div>
                       {isDead && <span className="text-[9px] text-rose-400 font-bold">MORTO</span>}
+                      {p.isBot && <span className="ml-1 text-[8px] text-cyan-400 font-mono">BOT</span>}
+                      {pVoted && (
+                        <div className="mt-1 text-[9px] font-bold text-amber-300 truncate">
+                          VOTOU EM: {votedFor}
+                        </div>
+                      )}
                     </div>
 
                     {/* Voted check badge */}
@@ -113,7 +125,7 @@ export const MeetingOverlay: React.FC<Props> = ({ meeting, players, self, chatMe
         </div>
       ) : (
         /* Result & Ejection Screen */
-        <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-slate-900/40 border border-slate-800 rounded-2xl">
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-slate-900/40 border border-slate-800 rounded-2xl overflow-y-auto">
           {meeting.ejectedPlayerName ? (
             <div>
               <div className="w-24 h-24 rounded-full bg-rose-950 border-4 border-rose-500 flex items-center justify-center text-4xl mx-auto mb-6 animate-bounce">
@@ -127,9 +139,28 @@ export const MeetingOverlay: React.FC<Props> = ({ meeting, players, self, chatMe
           ) : (
             <div>
               <div className="text-5xl mb-4">🤝</div>
-              <h3 className="text-3xl font-black text-slate-300 mb-2">Ninguém foi expulsão (Empate ou Votos Pulados).</h3>
+              <h3 className="text-3xl font-black text-slate-300 mb-2">Ninguém foi expulso (empate ou votos pulados).</h3>
             </div>
           )}
+
+          <div className="mt-8 w-full max-w-3xl border-t border-slate-700 pt-5">
+            <h4 className="text-xs font-black tracking-[.25em] text-cyan-300 mb-3">REGISTRO INDIVIDUAL DOS VOTOS</h4>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-left">
+              {players
+                .filter(player => meeting.votes[player.id])
+                .map(player => (
+                  <div key={player.id} className="flex items-center justify-between gap-3 bg-slate-950/75 border border-slate-800 px-3 py-2">
+                    <span className="min-w-0 text-xs font-bold text-white truncate">
+                      {player.name}
+                      {player.isBot && <small className="ml-1 text-cyan-400">BOT</small>}
+                    </span>
+                    <span className="text-[10px] font-black text-amber-300 truncate">
+                      → {voteTargetName(meeting.votes[player.id])}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

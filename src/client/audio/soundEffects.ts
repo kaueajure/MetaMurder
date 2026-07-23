@@ -82,6 +82,63 @@ class SoundEngine {
     } catch (e) {}
   }
 
+  public playDeathSound(): void {
+    try {
+      const ctx = this.initCtx();
+      const now = ctx.currentTime;
+      const volume = this.sfxVolume * this.masterVolume;
+
+      // Initial suit impact.
+      const impact = ctx.createOscillator();
+      const impactGain = ctx.createGain();
+      impact.type = 'sawtooth';
+      impact.frequency.setValueAtTime(180, now);
+      impact.frequency.exponentialRampToValueAtTime(32, now + 0.55);
+      impactGain.gain.setValueAtTime(0.78 * volume, now);
+      impactGain.gain.exponentialRampToValueAtTime(0.01, now + 0.58);
+      impact.connect(impactGain);
+      impactGain.connect(ctx.destination);
+      impact.start(now);
+      impact.stop(now + 0.6);
+
+      // Short filtered noise burst makes the hit readable on small speakers.
+      const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.32), ctx.sampleRate);
+      const noise = noiseBuffer.getChannelData(0);
+      for (let index = 0; index < noise.length; index++) {
+        noise[index] = Math.random() * 2 - 1;
+      }
+      const noiseSource = ctx.createBufferSource();
+      const noiseFilter = ctx.createBiquadFilter();
+      const noiseGain = ctx.createGain();
+      noiseSource.buffer = noiseBuffer;
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(950, now);
+      noiseFilter.Q.setValueAtTime(0.8, now);
+      noiseGain.gain.setValueAtTime(0.32 * volume, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      noiseSource.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noiseSource.start(now);
+
+      // Two slowing heartbeats before silence.
+      [0.72, 1.28].forEach((offset, index) => {
+        const heartbeat = ctx.createOscillator();
+        const heartbeatGain = ctx.createGain();
+        heartbeat.type = 'sine';
+        heartbeat.frequency.setValueAtTime(index === 0 ? 72 : 58, now + offset);
+        heartbeat.frequency.exponentialRampToValueAtTime(34, now + offset + 0.2);
+        heartbeatGain.gain.setValueAtTime(0.001, now + offset);
+        heartbeatGain.gain.linearRampToValueAtTime((0.52 - index * 0.14) * volume, now + offset + 0.025);
+        heartbeatGain.gain.exponentialRampToValueAtTime(0.01, now + offset + 0.24);
+        heartbeat.connect(heartbeatGain);
+        heartbeatGain.connect(ctx.destination);
+        heartbeat.start(now + offset);
+        heartbeat.stop(now + offset + 0.26);
+      });
+    } catch (e) {}
+  }
+
   public playEmergencyAlarm(): void {
     try {
       const ctx = this.initCtx();

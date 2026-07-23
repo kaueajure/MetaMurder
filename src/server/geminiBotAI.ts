@@ -16,10 +16,16 @@ export interface BotActionDecision {
   sabotageType: 'LIGHTS' | 'REACTOR' | 'O2' | 'NONE';
 }
 
+export interface BotVoteDecision {
+  targetId: string;
+  confidence: number;
+  message: string;
+}
+
 export interface BotAIProvider {
   readonly configured: boolean;
   createChat(worldContext: string, requestedReaction?: string): Promise<string | null>;
-  chooseVote(worldContext: string, eligibleTargetIds: string[]): Promise<string | null>;
+  chooseVote(worldContext: string, eligibleTargetIds: string[]): Promise<BotVoteDecision | null>;
   chooseAction(worldContext: string, validTargets: string[]): Promise<BotActionDecision | null>;
 }
 
@@ -76,32 +82,54 @@ Retorne a decisão de fala.`;
     return sanitizeChatMessage(result.message);
   }
 
-  public async chooseVote(worldContext: string, eligibleTargetIds: string[]): Promise<string | null> {
+  public async chooseVote(worldContext: string, eligibleTargetIds: string[]): Promise<BotVoteDecision | null> {
     if (!this.configured || eligibleTargetIds.length === 0) return null;
 
-    const prompt = `Você decide o voto de um jogador autônomo em um jogo de dedução social.
+    const prompt = `Você decide e anuncia o voto de um jogador autônomo em um jogo brasileiro de dedução social.
+Leia a conversa completa e a análise estruturada fornecida. Avalie:
+- quem acusou quem e qual argumento foi apresentado;
+- se há observação verificável, contradição, mudança de versão ou apenas pressão sem prova;
+- certeza, hesitação, agressividade e tentativa de desviar o assunto no modo de falar;
+- histórico de acusações erradas: acusadores que expulsaram inocentes merecem desconfiança futura.
+Não siga a maioria automaticamente e não trate uma acusação sem argumento como prova.
 Use somente fatos, memória e conversa fornecidos. Preserve sua função secreta.
 Se for assassino, tente sobreviver e proteger aliados sem agir de forma obviamente artificial.
-Escolha exatamente um dos IDs permitidos. SKIP significa pular.
+Escolha exatamente um dos IDs permitidos. SKIP significa pular quando não houver base suficiente.
+A mensagem deve parecer uma fala curta e natural no chat explicando o voto, sem prefixo, JSON ou narração.
 
 ESTADO CONFIÁVEL DO JOGO:
 ${worldContext}
 
 IDs PERMITIDOS: ${eligibleTargetIds.join(', ')}`;
 
-    const result = await this.request<{ targetId: string }>(prompt, {
+    const result = await this.request<BotVoteDecision>(prompt, {
       type: 'object',
       properties: {
         targetId: {
           type: 'string',
           enum: eligibleTargetIds,
           description: 'ID exato do jogador escolhido ou SKIP.'
-        }
+        },
+        confidence: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+          description: 'Confiança no voto, entre 0 e 1.'
+        },
+        message: {
+          type: 'string',
+          description: 'Uma frase natural em português brasileiro, com no máximo 140 caracteres, justificando o voto ou a dúvida.'
+        },
       },
-      required: ['targetId']
+      required: ['targetId', 'confidence', 'message']
     }, 0.35);
 
-    return result && eligibleTargetIds.includes(result.targetId) ? result.targetId : null;
+    if (!result || !eligibleTargetIds.includes(result.targetId)) return null;
+    return {
+      targetId: result.targetId,
+      confidence: Math.max(0, Math.min(1, Number(result.confidence) || 0)),
+      message: sanitizeChatMessage(result.message) ?? ''
+    };
   }
 
   public async chooseAction(worldContext: string, validTargets: string[]): Promise<BotActionDecision | null> {

@@ -34,6 +34,16 @@ export interface ObstacleRect {
   height: number;
 }
 
+export interface SecurityCamera {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  viewX: number;
+  viewY: number;
+  rotation: number;
+}
+
 // Escritório MetaMurder, reconstruído a partir da planta baixa fornecida.
 // A mesma geometria alimenta renderização, minimapa, colisão e navegação.
 export const MAP_BOUNDS = {
@@ -206,6 +216,22 @@ export const VENTS: Vent[] = [
   { id: 'vent_garage', roomId: 'GARAGEM',         x: 2310, y: 880, connectsTo: ['vent_dev', 'vent_server'] },
   { id: 'vent_green',  roomId: 'AREA_VERDE',      x: 1245, y: 120, connectsTo: ['vent_kitchen'] },
   { id: 'vent_kitchen', roomId: 'COZINHA',        x: 590,  y: 880, connectsTo: ['vent_green'] }
+];
+
+export const CAMERA_CONSOLE = {
+  id: 'camera_console',
+  roomId: 'SALA_DIGUINHO',
+  roomName: 'Sala Diguinho',
+  x: 1210,
+  y: 700
+};
+
+export const SECURITY_CAMERAS: SecurityCamera[] = [
+  { id: 'cam_corridor_west', name: 'Corredor Oeste', x: 710, y: 574, viewX: 520, viewY: 605, rotation: Math.PI },
+  { id: 'cam_corridor_center', name: 'Corredor Central', x: 1420, y: 636, viewX: 1260, viewY: 605, rotation: 0 },
+  { id: 'cam_corridor_east', name: 'Corredor Leste', x: 2050, y: 574, viewX: 2150, viewY: 605, rotation: Math.PI },
+  { id: 'cam_kitchen', name: 'Cozinha', x: 640, y: 674, viewX: 360, viewY: 795, rotation: -Math.PI / 2 },
+  { id: 'cam_garage', name: 'Garagem', x: 1910, y: 674, viewX: 2110, viewY: 795, rotation: -Math.PI / 2 }
 ];
 
 export const SABOTAGE_NODES = {
