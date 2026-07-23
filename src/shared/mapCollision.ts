@@ -1,5 +1,12 @@
 import { Vector2D } from './types';
-import { MAP_WALLS, MAP_BOUNDS, MAP_OBSTACLES, ObstacleRect, WallSegment } from './mapData';
+import {
+  BUILDING_BOUNDS,
+  MAP_WALLS,
+  MAP_BOUNDS,
+  MAP_OBSTACLES,
+  ObstacleRect,
+  WallSegment
+} from './mapData';
 
 export const PLAYER_COLLISION_RADIUS = 16;
 const MAX_SWEEP_STEP = 6;
@@ -45,6 +52,24 @@ export function clampPosition(current: Vector2D, next: Vector2D): Vector2D {
   }
 
   return position;
+}
+
+/**
+ * Ghosts are allowed to cross walls and furniture, but remain inside the
+ * office footprint so the camera never escapes into the infinite void.
+ */
+export function clampGhostPosition(next: Vector2D): Vector2D {
+  const margin = PLAYER_COLLISION_RADIUS;
+  return {
+    x: Math.max(
+      BUILDING_BOUNDS.x + margin,
+      Math.min(BUILDING_BOUNDS.x + BUILDING_BOUNDS.width - margin, next.x)
+    ),
+    y: Math.max(
+      BUILDING_BOUNDS.y + margin,
+      Math.min(BUILDING_BOUNDS.y + BUILDING_BOUNDS.height - margin, next.y)
+    )
+  };
 }
 
 export function checkWallCollision(center: Vector2D, radius: number): boolean {

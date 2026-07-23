@@ -172,6 +172,24 @@ export function updateUserCustomization(userId: string, color: string, hatId: st
   });
 }
 
+export function updateUsername(userId: string, username: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    db.run(
+      'UPDATE users SET username = ? WHERE id = ?',
+      [username, userId],
+      function (err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes !== 1) {
+          reject(new Error('Perfil não encontrado.'));
+        } else {
+          resolve();
+        }
+      }
+    );
+  });
+}
+
 export function recordGameStats(
   userId: string, 
   statsDelta: { crewWin?: boolean; impWin?: boolean; kills?: number; tasks?: number; correctVote?: boolean }
@@ -204,4 +222,3 @@ export function recordGameStats(
     });
   });
 }
-

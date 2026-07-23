@@ -35,6 +35,8 @@ export const HUD: React.FC<Props> = ({
 }) => {
   const isImpostor = self.role === 'IMPOSTOR';
   const isAlive = self.state === 'ALIVE';
+  const isGhost = self.state === 'DEAD' || self.state === 'GHOST';
+  const canUse = isAlive || (isGhost && !isImpostor);
   const taskPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Joystick touch/mouse state
@@ -111,8 +113,14 @@ export const HUD: React.FC<Props> = ({
             🗺️
           </button>
           
-          <div className={`px-4 py-2.5 border-l-2 font-black text-[10px] tracking-[.2em] shadow-xl backdrop-blur-md ${isImpostor ? 'bg-rose-950/65 border-rose-400 text-rose-300' : 'bg-cyan-950/55 border-cyan-300 text-cyan-200'}`}>
-            {isImpostor ? 'ASSASSINO' : 'TRIPULANTE'}
+          <div className={`px-4 py-2.5 border-l-2 font-black text-[10px] tracking-[.2em] shadow-xl backdrop-blur-md ${
+            isGhost
+              ? 'bg-violet-950/65 border-violet-300 text-violet-200'
+              : isImpostor
+                ? 'bg-rose-950/65 border-rose-400 text-rose-300'
+                : 'bg-cyan-950/55 border-cyan-300 text-cyan-200'
+          }`}>
+            {isGhost ? 'FANTASMA' : isImpostor ? 'ASSASSINO' : 'TRIPULANTE'}
           </div>
         </div>
       </div>
@@ -159,7 +167,7 @@ export const HUD: React.FC<Props> = ({
           )}
 
           {/* Use / Interact Button */}
-          {isAlive && (
+          {canUse && (
             <button
               disabled={!nearbyInteractable}
               onClick={() => { soundEngine.playButtonClick(); onUseInteract(); }}
@@ -170,7 +178,7 @@ export const HUD: React.FC<Props> = ({
               }`}
             >
               <span className="text-2xl mb-1">⚡</span>
-              <span className="text-[11px] font-black">USAR</span>
+              <span className="text-[11px] font-black">{isGhost ? 'TAREFA' : 'USAR'}</span>
             </button>
           )}
 

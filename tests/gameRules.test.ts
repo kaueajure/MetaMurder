@@ -47,7 +47,7 @@ describe('GameEngine Rules', () => {
 
     const killSuccess = engine.killPlayer(imp.id, crew.id);
     expect(killSuccess).toBe(true);
-    expect(crew.state).toBe('DEAD');
+    expect(crew.state).toBe('GHOST');
     expect(engine.bodies.length).toBe(1);
   });
 
@@ -77,7 +77,42 @@ describe('GameEngine Rules', () => {
     engine.castVote('p2', 'p1'); // p2 voted 2 times -> ejected
 
     expect(engine.meetingState?.ejectedPlayerId).toBe('p2');
-    expect(p2.state).toBe('DEAD');
+    expect(p2.state).toBe('GHOST');
+  });
+
+  it('allows a dead crewmate ghost to cross walls and finish remaining tasks', () => {
+    roomPlayers.set('p4', {
+      id: 'p4', socketId: 's4', name: 'Player 4', isBot: false,
+      color: 'YELLOW', hatId: 'NONE', skinId: 'DEFAULT', isHost: false, isReady: true
+    });
+    const engine = new GameEngine(
+      'GHOST01',
+      { ...DEFAULT_GAME_SETTINGS, impostorCount: 1 },
+      roomPlayers,
+      () => {},
+      () => {}
+    );
+    const impostor = Array.from(engine.players.values()).find(player => player.role === 'IMPOSTOR')!;
+    const ghost = Array.from(engine.players.values()).find(player => player.role === 'CREWMATE')!;
+
+    impostor.killCooldownRemaining = 0;
+    impostor.x = 400;
+    impostor.y = 610;
+    ghost.x = 400;
+    ghost.y = 610;
+    expect(engine.killPlayer(impostor.id, ghost.id)).toBe(true);
+    expect(ghost.state).toBe('GHOST');
+    expect(engine.phase).toBe('PLAYING');
+
+    (engine as any).lastMoveAt.set(ghost.id, Date.now() - 1000);
+    engine.handlePlayerMove(ghost.id, 400, 500, 0, -210, 'LEFT');
+    expect(ghost.y).toBeLessThan(560);
+
+    const task = ghost.tasks.find(candidate => !candidate.completed)!;
+    ghost.x = task.x;
+    ghost.y = task.y;
+    expect(engine.completeTask(ghost.id, task.id)).toBe(true);
+    expect(task.completed).toBe(true);
   });
 
   it('should only complete a crewmate task while the player is at its station', () => {

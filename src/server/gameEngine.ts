@@ -15,7 +15,7 @@ import {
 } from '../shared/types';
 import { TASK_DEFINITIONS, SPAWN_POINTS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
 import { TICK_RATE, KILL_DISTANCES } from '../shared/constants';
-import { clampPosition, hasLineOfSight } from './mapCollision';
+import { clampGhostPosition, clampPosition, hasLineOfSight } from './mapCollision';
 import { BotEngine } from './botEngine';
 import { BotAIProvider } from './geminiBotAI';
 import { RoomPlayer } from './roomManager';
@@ -190,7 +190,7 @@ export class GameEngine {
 
   public handlePlayerMove(playerId: string, x: number, y: number, vx: number, vy: number, facing: 'LEFT' | 'RIGHT'): void {
     const player = this.players.get(playerId);
-    if (!player || player.state === 'DEAD' || this.phase !== 'PLAYING') return;
+    if (!player || this.phase !== 'PLAYING') return;
 
     // Validate speed to prevent speed hacks
     const maxSpeed = 260 * this.settings.playerSpeed;
@@ -200,7 +200,8 @@ export class GameEngine {
 
     const now = Date.now();
     const elapsed = Math.min(0.25, Math.max(0, (now - (this.lastMoveAt.get(playerId) ?? now)) / 1000));
-    if (elapsed < 0.01) return;
+    const isStopUpdate = speed < 0.001;
+    if (elapsed < 0.01 && !isStopUpdate) return;
     this.lastMoveAt.set(playerId, now);
 
     // Limit displacement independently from the velocity claimed by the
@@ -218,7 +219,9 @@ export class GameEngine {
       x: player.x + requestedDx * displacementScale,
       y: player.y + requestedDy * displacementScale
     };
-    const clamped = clampPosition({ x: player.x, y: player.y }, targetPos);
+    const clamped = player.state === 'ALIVE'
+      ? clampPosition({ x: player.x, y: player.y }, targetPos)
+      : clampGhostPosition(targetPos);
 
     player.x = clamped.x;
     player.y = clamped.y;
@@ -246,7 +249,7 @@ export class GameEngine {
     if (!hasLineOfSight(killer, target)) return false;
 
     // Execute Kill
-    target.state = 'DEAD';
+    target.state = 'GHOST';
     killer.killCooldownRemaining = this.settings.killCooldown;
 
     // Spawn Dead Body
@@ -290,7 +293,7 @@ export class GameEngine {
   private startMeeting(caller: GamePlayer, reason: 'BODY', bodyId: string): void {
     this.phase = 'MEETING';
     
-    // Teleport all living players back to cafeteria spawn
+    // Reúne jogadores vivos e fantasmas nos pontos centrais junto à Reunião.
     let idx = 0;
     this.players.forEach(p => {
       const spawn = SPAWN_POINTS[idx % SPAWN_POINTS.length];
@@ -389,7 +392,7 @@ export class GameEngine {
     } else {
       const ejectedPlayer = this.players.get(ejectedId);
       if (ejectedPlayer) {
-        ejectedPlayer.state = 'DEAD';
+        ejectedPlayer.state = 'GHOST';
         this.meetingState.ejectedPlayerId = ejectedId;
         this.meetingState.ejectedPlayerName = ejectedPlayer.name;
         this.meetingState.wasImpostor = ejectedPlayer.role === 'IMPOSTOR';
@@ -414,7 +417,7 @@ export class GameEngine {
 
   public completeTask(playerId: string, taskId: string): boolean {
     const player = this.players.get(playerId);
-    if (!player || player.role !== 'CREWMATE' || player.state !== 'ALIVE' || this.phase !== 'PLAYING') {
+    if (!player || player.role !== 'CREWMATE' || this.phase !== 'PLAYING') {
       return false;
     }
 

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getOrCreateGuest, getUserProfile, updateUserCustomization } from './db';
+import { getOrCreateGuest, getUserProfile, updateUserCustomization, updateUsername } from './db';
 import { roomManager } from './roomManager';
 import { HATS, PLAYER_COLORS, SKINS } from '../shared/constants';
 
@@ -45,6 +45,37 @@ router.post('/profile/customize', async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/profile/name', async (req, res) => {
+  const userId = typeof req.body.userId === 'string' ? req.body.userId : '';
+  const username = typeof req.body.username === 'string'
+    ? req.body.username.trim().replace(/\s+/g, ' ')
+    : '';
+
+  if (
+    !userId ||
+    username.length < 2 ||
+    username.length > 15 ||
+    !/^[\p{L}\p{N}_ -]+$/u.test(username)
+  ) {
+    res.status(400).json({
+      error: 'Use de 2 a 15 caracteres: letras, números, espaço, hífen ou _.'
+    });
+    return;
+  }
+
+  try {
+    await updateUsername(userId, username);
+    const profile = await getUserProfile(userId);
+    res.json({ success: true, profile });
+  } catch (err: any) {
+    if (err?.code === 'SQLITE_CONSTRAINT') {
+      res.status(409).json({ error: 'Esse nome já está sendo usado.' });
+      return;
+    }
+    res.status(500).json({ error: err?.message || 'Não foi possível alterar o nome.' });
   }
 });
 

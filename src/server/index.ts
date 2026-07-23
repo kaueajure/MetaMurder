@@ -382,7 +382,14 @@ function broadcastGameState(room: any): void {
     if (!p.isBot && p.socketId) {
       const socket = io.sockets.sockets.get(p.socketId);
       if (socket) {
-        const publicPlayers: PlayerPublicData[] = Array.from(engine.players.values()).map(other => ({
+        const viewerIsGhost = p.state === 'DEAD' || p.state === 'GHOST';
+        const publicPlayers: PlayerPublicData[] = Array.from(engine.players.values())
+          .filter(other =>
+            engine.phase !== 'PLAYING' ||
+            viewerIsGhost ||
+            other.state === 'ALIVE'
+          )
+          .map(other => ({
           id: other.id,
           name: other.name,
           isBot: other.isBot,
@@ -435,5 +442,4 @@ if (typeof rawPort === 'string' && (rawPort.startsWith('/') || rawPort.startsWit
     console.log(`🚀 MetaMurder Server running on port ${portNum}`);
   });
 }
-
 

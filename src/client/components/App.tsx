@@ -227,7 +227,27 @@ export const App: React.FC = () => {
         onOpenSettings={() => setShowSettings(true)}
       />
 
-      {showProfile && <ProfileView profile={profile} onClose={() => setShowProfile(false)} />}
+      {showProfile && (
+        <ProfileView
+          profile={profile}
+          onSaveName={async username => {
+            const response = await fetch('/api/profile/name', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: profile.id, username })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.error || 'Não foi possível alterar o nome.');
+            }
+            setProfile(current => current
+              ? { ...current, username: data.profile?.username ?? username }
+              : current
+            );
+          }}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
       {showSettings && <SettingsView onClose={() => setShowSettings(false)} />}
     </>
   );

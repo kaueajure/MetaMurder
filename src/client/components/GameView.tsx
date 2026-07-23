@@ -8,7 +8,7 @@ import { MeetingOverlay } from './MeetingOverlay';
 import { TaskOverlay } from './TaskOverlay';
 import { SabotageOverlay } from './SabotageOverlay';
 import { SABOTAGE_NODES } from '../../shared/mapData';
-import { clampPosition, hasLineOfSight } from '../../shared/mapCollision';
+import { clampGhostPosition, clampPosition, hasLineOfSight } from '../../shared/mapCollision';
 import { socket } from '../socket';
 import { SOCKET_EVENTS } from '../../shared/protocol';
 
@@ -39,18 +39,33 @@ export const GameView: React.FC<Props> = ({
 
   // Smooth 60 FPS client prediction position
   const localPosRef = useRef<{ x: number; y: number }>({ x: self.x, y: self.y });
+  const localMotionRef = useRef<{
+    vx: number;
+    vy: number;
+    facing: 'LEFT' | 'RIGHT';
+  }>({ vx: 0, vy: 0, facing: self.facing });
+  const isLocallyMovingRef = useRef(false);
 
   const [activeTask, setActiveTask] = useState<PlayerTask | null>(null);
   const [activeSabotageFix, setActiveSabotageFix] = useState<boolean>(false);
   const [showMinimap, setShowMinimap] = useState<boolean>(false);
   const [nearbyInteractable, setNearbyInteractable] = useState<string | null>(null);
   const [nearbyBodyId, setNearbyBodyId] = useState<string | null>(null);
+  const nearbyInteractableRef = useRef<string | null>(null);
+  const nearbyBodyIdRef = useRef<string | null>(null);
+  const latestGameStateRef = useRef({ self, players, bodies, sabotage, meeting });
+  const latestUiStateRef = useRef({ activeTask, activeSabotageFix });
+  latestGameStateRef.current = { self, players, bodies, sabotage, meeting };
+  latestUiStateRef.current = { activeTask, activeSabotageFix };
 
-  // Reconcile server position if server lags behind
+  // Reconcile only meaningful server corrections. Normal updates arrive
+  // behind client prediction and must not drag the local character backwards.
   useEffect(() => {
     const dx = self.x - localPosRef.current.x;
     const dy = self.y - localPosRef.current.y;
-    if (Math.sqrt(dx * dx + dy * dy) > 120) {
+    const correctionDistance = Math.hypot(dx, dy);
+    const correctionThreshold = isLocallyMovingRef.current ? 240 : 24;
+    if (correctionDistance > correctionThreshold) {
       localPosRef.current = { x: self.x, y: self.y };
     }
   }, [self.x, self.y]);
@@ -88,21 +103,45 @@ export const GameView: React.FC<Props> = ({
       const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
       lastTime = currentTime;
       moveThrottleTimer += dt;
+      const {
+        self: currentSelf,
+        players: currentPlayers,
+        bodies: currentBodies,
+        sabotage: currentSabotage,
+        meeting: currentMeeting
+      } = latestGameStateRef.current;
+      const {
+        activeTask: currentTask,
+        activeSabotageFix: currentSabotageFix
+      } = latestUiStateRef.current;
 
-      if (inputHandlerRef.current && self.state === 'ALIVE' && !meeting && !activeTask && !activeSabotageFix) {
+      if (
+        inputHandlerRef.current &&
+        !currentMeeting &&
+        !currentTask &&
+        !currentSabotageFix
+      ) {
         const state = inputHandlerRef.current.getInputState();
+        const isMoving = state.moveX !== 0 || state.moveY !== 0;
         
-        if (state.moveX !== 0 || state.moveY !== 0) {
+        if (isMoving) {
           const speed = 210; // Fluid walking speed
           const vx = state.moveX * speed;
           const vy = state.moveY * speed;
-          const facing = state.moveX < 0 ? 'LEFT' : 'RIGHT';
+          const facing = state.moveX === 0
+            ? localMotionRef.current.facing
+            : state.moveX < 0 ? 'LEFT' : 'RIGHT';
+          localMotionRef.current = { vx, vy, facing };
+          isLocallyMovingRef.current = true;
 
           // Move local position smoothly at 60 FPS
-          localPosRef.current = clampPosition(localPosRef.current, {
+          const requestedPosition = {
             x: localPosRef.current.x + vx * dt,
             y: localPosRef.current.y + vy * dt
-          });
+          };
+          localPosRef.current = currentSelf.state === 'ALIVE'
+            ? clampPosition(localPosRef.current, requestedPosition)
+            : clampGhostPosition(requestedPosition);
 
           // Throttle socket C2S_MOVE updates to 30Hz
           if (moveThrottleTimer >= 0.033) {
@@ -115,6 +154,24 @@ export const GameView: React.FC<Props> = ({
               facing
             });
           }
+        } else {
+          if (isLocallyMovingRef.current) {
+            // Send the exact release position instead of waiting for another
+            // server snapshot, reducing the correction needed after key-up.
+            socket.emit(SOCKET_EVENTS.C2S_MOVE, {
+              x: localPosRef.current.x,
+              y: localPosRef.current.y,
+              vx: 0,
+              vy: 0,
+              facing: localMotionRef.current.facing
+            });
+          }
+          isLocallyMovingRef.current = false;
+          localMotionRef.current = {
+            ...localMotionRef.current,
+            vx: 0,
+            vy: 0
+          };
         }
 
         // Calculate nearby interactable on EVERY FRAME
@@ -124,8 +181,8 @@ export const GameView: React.FC<Props> = ({
         let detectedInteractable: string | null = null;
 
         // Check Crewmate Tasks
-        if (self.role === 'CREWMATE') {
-          for (const t of self.tasks) {
+        if (currentSelf.role === 'CREWMATE') {
+          for (const t of currentSelf.tasks) {
             if (!t.completed) {
               const d = Math.sqrt(Math.pow(posX - t.x, 2) + Math.pow(posY - t.y, 2));
               if (d < 120 && hasLineOfSight({ x: posX, y: posY }, t)) {
@@ -137,31 +194,37 @@ export const GameView: React.FC<Props> = ({
         }
 
         // Check Sabotage Nodes
-        if (!detectedInteractable && sabotage.activeType === 'LIGHTS') {
+        if (
+          !detectedInteractable &&
+          currentSelf.state === 'ALIVE' &&
+          currentSabotage.activeType === 'LIGHTS'
+        ) {
           const node = SABOTAGE_NODES.LIGHTS_BREAKER;
           if (Math.sqrt(Math.pow(posX - node.x, 2) + Math.pow(posY - node.y, 2)) < 120) {
             detectedInteractable = 'LIGHTS_BREAKER';
           }
         }
 
-        if (detectedInteractable !== nearbyInteractable) {
+        if (detectedInteractable !== nearbyInteractableRef.current) {
+          nearbyInteractableRef.current = detectedInteractable;
           setNearbyInteractable(detectedInteractable);
         }
 
-        const closestBody = bodies
+        const closestBody = currentSelf.state === 'ALIVE' ? currentBodies
           .filter(body => !body.reported)
           .map(body => ({
             id: body.id,
             distance: Math.hypot(posX - body.x, posY - body.y)
           }))
           .filter(body => {
-            const sourceBody = bodies.find(candidate => candidate.id === body.id)!;
+            const sourceBody = currentBodies.find(candidate => candidate.id === body.id)!;
             return body.distance <= 150 &&
               hasLineOfSight({ x: posX, y: posY }, sourceBody);
           })
-          .sort((a, b) => a.distance - b.distance)[0];
+          .sort((a, b) => a.distance - b.distance)[0] : undefined;
         const detectedBodyId = closestBody?.id ?? null;
-        if (detectedBodyId !== nearbyBodyId) {
+        if (detectedBodyId !== nearbyBodyIdRef.current) {
+          nearbyBodyIdRef.current = detectedBodyId;
           setNearbyBodyId(detectedBodyId);
         }
 
@@ -169,12 +232,44 @@ export const GameView: React.FC<Props> = ({
         if (state.isInteracting && detectedInteractable) {
           triggerInteract(detectedInteractable);
         }
+      } else {
+        isLocallyMovingRef.current = false;
+        localMotionRef.current = {
+          ...localMotionRef.current,
+          vx: 0,
+          vy: 0
+        };
       }
 
       // Render Scene
       if (rendererRef.current) {
-        const predictedSelf = { ...self, x: localPosRef.current.x, y: localPosRef.current.y };
-        rendererRef.current.render(predictedSelf, players, bodies, sabotage, nearbyInteractable);
+        const predictedSelf = {
+          ...currentSelf,
+          x: localPosRef.current.x,
+          y: localPosRef.current.y,
+          ...localMotionRef.current
+        };
+        // The camera and local character must use the same 60 FPS prediction.
+        // Remote players continue using authoritative server snapshots.
+        const predictedPlayers = currentPlayers.map(player =>
+          player.id === currentSelf.id
+            ? {
+                ...player,
+                x: predictedSelf.x,
+                y: predictedSelf.y,
+                vx: predictedSelf.vx,
+                vy: predictedSelf.vy,
+                facing: predictedSelf.facing
+              }
+            : player
+        );
+        rendererRef.current.render(
+          predictedSelf,
+          predictedPlayers,
+          currentBodies,
+          currentSabotage,
+          nearbyInteractableRef.current
+        );
       }
 
       animFrameId = requestAnimationFrame(loop);
@@ -182,13 +277,13 @@ export const GameView: React.FC<Props> = ({
 
     animFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [self, players, bodies, sabotage, meeting, activeTask, activeSabotageFix, nearbyInteractable, nearbyBodyId]);
+  }, []);
 
   const triggerInteract = (targetId: string) => {
     if (targetId === 'LIGHTS_BREAKER') {
       setActiveSabotageFix(true);
     } else {
-      const task = self.tasks.find(t => t.id === targetId);
+      const task = latestGameStateRef.current.self.tasks.find(t => t.id === targetId);
       if (task) {
         setActiveTask(task);
       }
@@ -222,7 +317,12 @@ export const GameView: React.FC<Props> = ({
     socket.emit(SOCKET_EVENTS.C2S_TRIGGER_SABOTAGE, { type: 'LIGHTS' });
   };
 
-  const predictedSelf = { ...self, x: localPosRef.current.x, y: localPosRef.current.y };
+  const predictedSelf = {
+    ...self,
+    x: localPosRef.current.x,
+    y: localPosRef.current.y,
+    ...localMotionRef.current
+  };
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950">

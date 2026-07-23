@@ -1,6 +1,6 @@
 import { Vector2D } from '../shared/types';
 import { ROOMS, SABOTAGE_NODES, MAP_BOUNDS } from '../shared/mapData';
-import { clampPosition } from '../shared/mapCollision';
+import { clampGhostPosition, clampPosition } from '../shared/mapCollision';
 import { GameEngine, GamePlayer } from './gameEngine';
 import {
   BotActionDecision,
@@ -23,7 +23,7 @@ export const WAYPOINTS: Record<string, WaypointNode> = {
   BANHEIRO_NORTE: { id: 'BANHEIRO_NORTE', x: 900, y: 160, neighbors: ['D_BATH_N'] },
   ACESSO_NORTE:   { id: 'ACESSO_NORTE', x: 900, y: 420, neighbors: ['D_BATH_N', 'D_ACCESS_N'] },
   AREA_VERDE:     { id: 'AREA_VERDE', x: 1200, y: 170, neighbors: ['D_GREEN'] },
-  ATRIO:          { id: 'ATRIO', x: 1050, y: 420, neighbors: ['D_GREEN', 'D_ATRIO'] },
+  REUNIAO:        { id: 'REUNIAO', x: 1050, y: 420, neighbors: ['D_GREEN', 'D_REUNIAO'] },
   DESENVOLVIMENTO: { id: 'DESENVOLVIMENTO', x: 1770, y: 260, neighbors: ['D_DEV'] },
   COMERCIAL:      { id: 'COMERCIAL', x: 2110, y: 310, neighbors: ['D_COMM'] },
   BANHEIRO_LESTE: { id: 'BANHEIRO_LESTE', x: 2260, y: 150, neighbors: ['D_BATH_E'] },
@@ -42,8 +42,8 @@ export const WAYPOINTS: Record<string, WaypointNode> = {
   D_LAZER:     { id: 'D_LAZER', x: 710, y: 530, neighbors: ['SALA_LAZER', 'C_LAZER'] },
   D_BATH_N:    { id: 'D_BATH_N', x: 900, y: 280, neighbors: ['BANHEIRO_NORTE', 'ACESSO_NORTE'] },
   D_ACCESS_N:  { id: 'D_ACCESS_N', x: 900, y: 530, neighbors: ['ACESSO_NORTE', 'C_ACCESS_N'] },
-  D_GREEN:     { id: 'D_GREEN', x: 1200, y: 280, neighbors: ['AREA_VERDE', 'ATRIO'] },
-  D_ATRIO:     { id: 'D_ATRIO', x: 1050, y: 530, neighbors: ['ATRIO', 'C_ATRIO'] },
+  D_GREEN:     { id: 'D_GREEN', x: 1200, y: 280, neighbors: ['AREA_VERDE', 'REUNIAO'] },
+  D_REUNIAO:   { id: 'D_REUNIAO', x: 1050, y: 530, neighbors: ['REUNIAO', 'C_REUNIAO'] },
   D_DEV:       { id: 'D_DEV', x: 1750, y: 530, neighbors: ['DESENVOLVIMENTO', 'C_DEV'] },
   D_COMM:      { id: 'D_COMM', x: 2030, y: 530, neighbors: ['COMERCIAL', 'C_COMM'] },
   D_BATH_E:    { id: 'D_BATH_E', x: 2250, y: 260, neighbors: ['BANHEIRO_LESTE', 'ACESSO_LESTE'] },
@@ -61,9 +61,9 @@ export const WAYPOINTS: Record<string, WaypointNode> = {
   C_KITCHEN:  { id: 'C_KITCHEN', x: 285, y: 605, neighbors: ['D_KITCHEN', 'C_FUMO'] },
   C_CONSULT:  { id: 'C_CONSULT', x: 510, y: 605, neighbors: ['D_CONSULT', 'C_FUMO', 'C_LAZER'] },
   C_LAZER:    { id: 'C_LAZER', x: 710, y: 605, neighbors: ['D_LAZER', 'C_CONSULT', 'C_ACCESS_N'] },
-  C_ACCESS_N: { id: 'C_ACCESS_N', x: 900, y: 605, neighbors: ['D_ACCESS_N', 'C_LAZER', 'C_ATRIO'] },
-  C_ATRIO:    { id: 'C_ATRIO', x: 1050, y: 605, neighbors: ['D_ATRIO', 'C_ACCESS_N', 'C_DIGUINHO'] },
-  C_DIGUINHO: { id: 'C_DIGUINHO', x: 1150, y: 605, neighbors: ['D_DIGUINHO', 'C_ATRIO', 'C_SUPPLY'] },
+  C_ACCESS_N: { id: 'C_ACCESS_N', x: 900, y: 605, neighbors: ['D_ACCESS_N', 'C_LAZER', 'C_REUNIAO'] },
+  C_REUNIAO:  { id: 'C_REUNIAO', x: 1050, y: 605, neighbors: ['D_REUNIAO', 'C_ACCESS_N', 'C_DIGUINHO'] },
+  C_DIGUINHO: { id: 'C_DIGUINHO', x: 1150, y: 605, neighbors: ['D_DIGUINHO', 'C_REUNIAO', 'C_SUPPLY'] },
   C_SUPPLY:   { id: 'C_SUPPLY', x: 1400, y: 605, neighbors: ['D_SUPPLY', 'C_DIGUINHO', 'C_TONHO'] },
   C_TONHO:    { id: 'C_TONHO', x: 1680, y: 605, neighbors: ['D_TONHO', 'C_SUPPLY', 'C_DEV'] },
   C_DEV:      { id: 'C_DEV', x: 1750, y: 605, neighbors: ['D_DEV', 'C_TONHO', 'C_COMM'] },
@@ -107,7 +107,7 @@ function findNearestWaypoint(position: Vector2D): string {
   );
   if (room && WAYPOINTS[room.id]) return room.id;
 
-  let closest = 'C_ATRIO';
+  let closest = 'C_REUNIAO';
   let closestDistance = Infinity;
 
   for (const [key, waypoint] of Object.entries(WAYPOINTS)) {
@@ -177,8 +177,15 @@ export class BotEngine {
   }
 
   public tick(bot: GamePlayer, deltaTime: number): void {
-    if (bot.state !== 'ALIVE' || this.gameEngine.phase !== 'PLAYING') return;
+    if (this.gameEngine.phase !== 'PLAYING') return;
     const memory = this.getMemory(bot.id);
+
+    if (bot.state !== 'ALIVE') {
+      if (bot.role !== 'CREWMATE') return;
+      memory.decision = this.safeOfflineMovement(bot);
+      this.executeDecision(bot, memory, deltaTime);
+      return;
+    }
 
     this.updateRoom(bot, memory);
     this.updateVision(bot, memory);
@@ -507,10 +514,13 @@ export class BotEngine {
     bot.vx = dx / distance * speed;
     bot.vy = dy / distance * speed;
     bot.facing = dx < 0 ? 'LEFT' : 'RIGHT';
-    const next = clampPosition(bot, {
+    const requestedPosition = {
       x: Math.max(26, Math.min(MAP_BOUNDS.width - 26, bot.x + bot.vx * deltaTime)),
       y: Math.max(26, Math.min(MAP_BOUNDS.height - 26, bot.y + bot.vy * deltaTime))
-    });
+    };
+    const next = bot.state === 'ALIVE'
+      ? clampPosition(bot, requestedPosition)
+      : clampGhostPosition(requestedPosition);
     bot.x = next.x;
     bot.y = next.y;
   }
