@@ -55,11 +55,11 @@ export const CameraOverlay: React.FC<Props> = ({ players, bodies, onClose }) => 
   const activeCamera = SECURITY_CAMERAS[cameraIndex];
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 md:p-8">
-      <section className="w-full max-w-6xl border border-cyan-300/35 bg-[#02060d] shadow-[0_0_70px_rgba(34,211,238,.16)]">
-        <header className="h-16 px-5 flex items-center justify-between border-b border-cyan-300/20 bg-slate-950">
+    <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 md:p-8">
+      <section className="w-full max-w-6xl border border-stone-500 bg-[#151513] shadow-2xl">
+        <header className="h-16 px-5 flex items-center justify-between border-b border-stone-700 bg-[#20201e]">
           <div>
-            <p className="text-[9px] uppercase tracking-[.35em] text-cyan-300/60 font-bold">Central de segurança</p>
+            <p className="text-[9px] uppercase tracking-[.35em] text-stone-400 font-bold">Central de segurança</p>
             <h2 className="text-lg font-black text-white">CÂMERAS AO VIVO · {activeCamera.name.toUpperCase()}</h2>
           </div>
           <div className="flex items-center gap-4">
@@ -70,7 +70,7 @@ export const CameraOverlay: React.FC<Props> = ({ players, bodies, onClose }) => 
             <button
               onClick={onClose}
               aria-label="Fechar câmeras"
-              className="w-9 h-9 border border-white/15 text-slate-300 hover:text-white hover:border-white/40"
+              className="w-9 h-9 border border-stone-600 text-stone-300 hover:text-white hover:border-stone-400"
             >
               ✕
             </button>
@@ -79,23 +79,23 @@ export const CameraOverlay: React.FC<Props> = ({ players, bodies, onClose }) => 
 
         <div className="relative aspect-video overflow-hidden bg-black">
           <canvas ref={canvasRef} className="w-full h-full object-cover" />
-          <div className="pointer-events-none absolute inset-4 border border-cyan-200/20">
-            <span className="absolute left-2 top-2 text-[9px] font-mono text-cyan-200/70">
+          <div className="pointer-events-none absolute inset-4 border border-white/15">
+            <span className="absolute left-2 top-2 text-[9px] font-mono text-stone-200/70">
               {activeCamera.id.toUpperCase()} · SINAL ESTÁVEL
             </span>
-            <span className="absolute right-2 bottom-2 text-[9px] font-mono text-cyan-200/50">
+            <span className="absolute right-2 bottom-2 text-[9px] font-mono text-stone-200/50">
               AO VIVO
             </span>
           </div>
           <button
             onClick={() => selectRelative(-1)}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-20 bg-black/60 border border-white/15 text-2xl hover:border-cyan-300/60"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-20 bg-black/60 border border-white/20 text-2xl hover:border-white/60"
           >
             ‹
           </button>
           <button
             onClick={() => selectRelative(1)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-20 bg-black/60 border border-white/15 text-2xl hover:border-cyan-300/60"
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-20 bg-black/60 border border-white/20 text-2xl hover:border-white/60"
           >
             ›
           </button>
@@ -108,8 +108,8 @@ export const CameraOverlay: React.FC<Props> = ({ players, bodies, onClose }) => 
               onClick={() => setCameraIndex(index)}
               className={`px-3 py-3 text-[10px] font-black border-r border-white/10 transition-colors ${
                 index === cameraIndex
-                  ? 'bg-cyan-300 text-slate-950'
-                  : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-white/5'
+                  ? 'bg-stone-200 text-stone-950'
+                  : 'bg-[#20201e] text-stone-400 hover:text-white hover:bg-stone-700'
               }`}
             >
               {String(index + 1).padStart(2, '0')} · {camera.name.toUpperCase()}

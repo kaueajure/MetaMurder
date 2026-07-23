@@ -11,13 +11,13 @@ export const Minimap: React.FC<Props> = ({ self, onClose }) => {
   const scale = 0.25;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border-2 border-cyan-500/50 rounded-2xl p-6 w-full max-w-2xl shadow-2xl relative">
-        <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
-          <h3 className="text-xl font-black text-cyan-400">MINIMAPA DA ESTAÇÃO</h3>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-stone-100 border border-stone-400 rounded-lg p-6 w-full max-w-2xl shadow-2xl relative">
+        <div className="flex justify-between items-center mb-4 border-b border-stone-300 pb-3">
+          <h3 className="text-xl font-black text-stone-800">PLANTA DO ESCRITÓRIO</h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white flex items-center justify-center font-bold"
+            className="w-8 h-8 rounded-full bg-stone-300 text-stone-700 hover:bg-stone-400 flex items-center justify-center font-bold"
           >
             ✕
           </button>
@@ -25,13 +25,13 @@ export const Minimap: React.FC<Props> = ({ self, onClose }) => {
 
         {/* Tactical Map Container */}
         <div 
-          className="relative bg-slate-950 rounded-xl border border-slate-800 overflow-hidden mx-auto"
+          className="relative bg-stone-300 border border-stone-500 overflow-hidden mx-auto"
           style={{ width: MAP_BOUNDS.width * scale, height: MAP_BOUNDS.height * scale }}
         >
           {CORRIDOR_AREAS.map(area => (
             <div
               key={area.id}
-              className="absolute border-y border-cyan-500/30 bg-slate-800/90 flex items-center justify-center text-[8px] font-black tracking-[.35em] text-cyan-200/40"
+              className="absolute border-y border-stone-400 bg-stone-100 flex items-center justify-center text-[8px] font-black tracking-[.35em] text-stone-500"
               style={{
                 left: area.x * scale,
                 top: area.y * scale,
@@ -47,7 +47,7 @@ export const Minimap: React.FC<Props> = ({ self, onClose }) => {
           {ROOMS.map(room => (
             <div
               key={room.id}
-              className="absolute border border-cyan-500/30 flex items-center justify-center text-[10px] font-bold text-slate-400/80 uppercase tracking-tighter"
+              className="absolute border border-stone-400 flex items-center justify-center text-[10px] font-bold text-stone-700 uppercase tracking-tighter"
               style={{
                 left: room.x * scale,
                 top: room.y * scale,
@@ -63,7 +63,7 @@ export const Minimap: React.FC<Props> = ({ self, onClose }) => {
           {MAP_OBSTACLES.map(obstacle => (
             <div
               key={obstacle.id}
-              className="absolute border border-white/15 bg-slate-950/65"
+              className="absolute border border-stone-500 bg-stone-500/65"
               style={{
                 left: obstacle.x * scale,
                 top: obstacle.y * scale,

@@ -71,25 +71,25 @@ export const SPAWN_POINTS: Vector2D[] = [
 ];
 
 export const ROOMS: RoomRect[] = [
-  { id: 'FUMODROMO',       name: 'Fumódromo',       x: 60,   y: 60,  width: 290, height: 500, color: '#26384a' },
-  { id: 'CONSULTORIA',      name: 'Consultoria',      x: 350,  y: 60,  width: 470, height: 240, color: '#20394b' },
-  { id: 'SALA_LAZER',       name: 'Sala de Lazer',    x: 350,  y: 300, width: 470, height: 260, color: '#29354c' },
-  { id: 'BANHEIRO_NORTE',   name: 'Banheiro',         x: 820,  y: 60,  width: 160, height: 220, color: '#244354' },
-  { id: 'ACESSO_NORTE',     name: 'Acesso',           x: 820,  y: 280, width: 160, height: 280, color: '#172d40' },
-  { id: 'AREA_VERDE',       name: 'Área Verde',       x: 980,  y: 60,  width: 440, height: 220, color: '#174237' },
-  { id: 'REUNIAO',          name: 'Reunião',          x: 980,  y: 280, width: 440, height: 280, color: '#203f43' },
-  { id: 'DESENVOLVIMENTO',  name: 'Desenvolvimento',  x: 1420, y: 60,  width: 400, height: 500, color: '#222d4a' },
-  { id: 'COMERCIAL',        name: 'Comercial',        x: 1820, y: 60,  width: 360, height: 500, color: '#2d3148' },
-  { id: 'BANHEIRO_LESTE',   name: 'Banheiro',         x: 2180, y: 60,  width: 160, height: 200, color: '#244354' },
-  { id: 'ACESSO_LESTE',     name: 'Acesso Leste',     x: 2180, y: 260, width: 160, height: 300, color: '#172d40' },
-  { id: 'COZINHA',          name: 'Cozinha',          x: 60,   y: 650, width: 620, height: 290, color: '#3c3328' },
-  { id: 'BANHEIRO_M',       name: 'Banheiro M',       x: 680,  y: 650, width: 190, height: 145, color: '#244354' },
-  { id: 'BANHEIRO_F',       name: 'Banheiro F',       x: 680,  y: 795, width: 190, height: 145, color: '#2c3f55' },
-  { id: 'SALA_DIGUINHO',    name: 'Sala Diguinho',    x: 980,  y: 650, width: 280, height: 290, color: '#2d2d4d' },
-  { id: 'SUPRIMENTOS',      name: 'Suprimentos',      x: 1260, y: 650, width: 320, height: 170, color: '#39402d' },
-  { id: 'SERVER',           name: 'Server',           x: 1260, y: 820, width: 320, height: 120, color: '#321e3f' },
-  { id: 'SALA_TONHO',       name: 'Sala Tonho',       x: 1580, y: 650, width: 300, height: 290, color: '#28394b' },
-  { id: 'GARAGEM',          name: 'Garagem',          x: 1880, y: 650, width: 460, height: 290, color: '#30383b' }
+  { id: 'FUMODROMO',       name: 'Fumódromo',       x: 60,   y: 60,  width: 290, height: 500, color: '#eeede9' },
+  { id: 'CONSULTORIA',      name: 'Consultoria',      x: 350,  y: 60,  width: 470, height: 240, color: '#f5f4f0' },
+  { id: 'SALA_LAZER',       name: 'Sala de Lazer',    x: 350,  y: 300, width: 470, height: 260, color: '#f1f0ec' },
+  { id: 'BANHEIRO_NORTE',   name: 'Banheiro',         x: 820,  y: 60,  width: 160, height: 220, color: '#f7f7f4' },
+  { id: 'ACESSO_NORTE',     name: 'Acesso',           x: 820,  y: 280, width: 160, height: 280, color: '#efeee9' },
+  { id: 'AREA_VERDE',       name: 'Área Verde',       x: 980,  y: 60,  width: 440, height: 220, color: '#d9e2d1' },
+  { id: 'REUNIAO',          name: 'Reunião',          x: 980,  y: 280, width: 440, height: 280, color: '#f5f4f0' },
+  { id: 'DESENVOLVIMENTO',  name: 'Desenvolvimento',  x: 1420, y: 60,  width: 400, height: 500, color: '#f2f1ed' },
+  { id: 'COMERCIAL',        name: 'Comercial',        x: 1820, y: 60,  width: 360, height: 500, color: '#f6f5f2' },
+  { id: 'BANHEIRO_LESTE',   name: 'Banheiro',         x: 2180, y: 60,  width: 160, height: 200, color: '#f7f7f4' },
+  { id: 'ACESSO_LESTE',     name: 'Acesso Leste',     x: 2180, y: 260, width: 160, height: 300, color: '#efeee9' },
+  { id: 'COZINHA',          name: 'Cozinha',          x: 60,   y: 650, width: 620, height: 290, color: '#f5f4ef' },
+  { id: 'BANHEIRO_M',       name: 'Banheiro M',       x: 680,  y: 650, width: 190, height: 145, color: '#f7f7f4' },
+  { id: 'BANHEIRO_F',       name: 'Banheiro F',       x: 680,  y: 795, width: 190, height: 145, color: '#f7f7f4' },
+  { id: 'SALA_DIGUINHO',    name: 'Sala Diguinho',    x: 980,  y: 650, width: 280, height: 290, color: '#f3f2ee' },
+  { id: 'SUPRIMENTOS',      name: 'Suprimentos',      x: 1260, y: 650, width: 320, height: 170, color: '#eeede7' },
+  { id: 'SERVER',           name: 'Server',           x: 1260, y: 820, width: 320, height: 120, color: '#e9e9e6' },
+  { id: 'SALA_TONHO',       name: 'Sala Tonho',       x: 1580, y: 650, width: 300, height: 290, color: '#f3f2ee' },
+  { id: 'GARAGEM',          name: 'Garagem',          x: 1880, y: 650, width: 460, height: 290, color: '#e5e5e1' }
 ];
 
 function horizontalWall(y: number, start: number, end: number, gaps: Array<[number, number]> = []): WallSegment[] {
@@ -227,11 +227,11 @@ export const CAMERA_CONSOLE = {
 };
 
 export const SECURITY_CAMERAS: SecurityCamera[] = [
-  { id: 'cam_corridor_west', name: 'Corredor Oeste', x: 710, y: 574, viewX: 520, viewY: 605, rotation: Math.PI },
-  { id: 'cam_corridor_center', name: 'Corredor Central', x: 1420, y: 636, viewX: 1260, viewY: 605, rotation: 0 },
-  { id: 'cam_corridor_east', name: 'Corredor Leste', x: 2050, y: 574, viewX: 2150, viewY: 605, rotation: Math.PI },
-  { id: 'cam_kitchen', name: 'Cozinha', x: 640, y: 674, viewX: 360, viewY: 795, rotation: -Math.PI / 2 },
-  { id: 'cam_garage', name: 'Garagem', x: 1910, y: 674, viewX: 2110, viewY: 795, rotation: -Math.PI / 2 }
+  { id: 'cam_corridor_west', name: 'Corredor Oeste', x: 710, y: 574, viewX: 520, viewY: 605, rotation: 2.98 },
+  { id: 'cam_corridor_center', name: 'Corredor Central', x: 1420, y: 636, viewX: 1260, viewY: 605, rotation: -2.95 },
+  { id: 'cam_corridor_east', name: 'Corredor Leste', x: 2050, y: 574, viewX: 2150, viewY: 605, rotation: 0.30 },
+  { id: 'cam_kitchen', name: 'Cozinha', x: 640, y: 674, viewX: 360, viewY: 795, rotation: 2.73 },
+  { id: 'cam_garage', name: 'Garagem', x: 1910, y: 674, viewX: 2110, viewY: 795, rotation: 0.54 }
 ];
 
 export const SABOTAGE_NODES = {
